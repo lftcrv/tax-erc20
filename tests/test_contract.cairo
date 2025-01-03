@@ -21,7 +21,7 @@ fn test_using_forked_state() {
     println!("Stable address = {:?}", stable_address);
     let tax_token_address = deploy_tax_erc20();
     println!("tax_token address = {:?}", tax_token_address);
-
+    
     // Create a Dispatcher object that will allow interacting with the deployed contract
     let numPoolBefore = factory.num_of_pairs();
     assert!(numPoolBefore > 0);
@@ -29,13 +29,10 @@ fn test_using_forked_state() {
     
     
     let pair_address = factory.create_pair(tax_token_address, stable_address);
-    
+    println!("pair_address  = {:?}", pair_address);
 
-
-
-
-
-
+    let numPoolAfter = factory.num_of_pairs();
+    assert!(numPoolAfter == numPoolBefore + 1);
 }
 
 pub fn deploy_erc20() -> ContractAddress {
