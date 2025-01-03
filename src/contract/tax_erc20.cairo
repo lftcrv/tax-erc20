@@ -3,9 +3,8 @@
 
 #[starknet::contract]
 mod TaxERC20 {
-    use openzeppelin_utils::bytearray::ByteArrayExtTrait;
-use core::to_byte_array::FormatAsByteArray;
-use openzeppelin::access::ownable::OwnableComponent;
+    use core::to_byte_array::FormatAsByteArray;
+    use openzeppelin::access::ownable::OwnableComponent;
     use openzeppelin::token::erc20::{ERC20Component, ERC20HooksEmptyImpl};
     use openzeppelin::upgrades::interface::IUpgradeable;
     use openzeppelin::upgrades::UpgradeableComponent;
@@ -46,11 +45,14 @@ use openzeppelin::access::ownable::OwnableComponent;
         #[flat]
         UpgradeableEvent: UpgradeableComponent::Event,
     }
-    
+
     #[constructor]
-    fn constructor(ref self: ContractState, owner: ContractAddress, name: felt252, symbol: felt252) {
+    fn constructor(
+        ref self: ContractState, owner: ContractAddress, name: felt252, symbol: felt252,
+    ) {
         let name_arr = name.format_as_byte_array(256);
-        let symbol_arr = symbol.format_as_byte_array(256);  
+        let symbol_arr = symbol.format_as_byte_array(256);
+
         self.erc20.initializer(name_arr, symbol_arr);
         self.ownable.initializer(owner);
     }
@@ -58,7 +60,7 @@ use openzeppelin::access::ownable::OwnableComponent;
     //
     // Upgradeable
     //
-    
+
     #[abi(embed_v0)]
     impl UpgradeableImpl of IUpgradeable<ContractState> {
         fn upgrade(ref self: ContractState, new_class_hash: ClassHash) {
