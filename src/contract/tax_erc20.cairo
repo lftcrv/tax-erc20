@@ -2,8 +2,10 @@
 // Compatible with OpenZeppelin Contracts for Cairo ^0.20.0
 
 #[starknet::contract]
-mod MyToken {
-    use openzeppelin::access::ownable::OwnableComponent;
+mod TaxERC20 {
+    use openzeppelin_utils::bytearray::ByteArrayExtTrait;
+use core::to_byte_array::FormatAsByteArray;
+use openzeppelin::access::ownable::OwnableComponent;
     use openzeppelin::token::erc20::{ERC20Component, ERC20HooksEmptyImpl};
     use openzeppelin::upgrades::interface::IUpgradeable;
     use openzeppelin::upgrades::UpgradeableComponent;
@@ -44,10 +46,12 @@ mod MyToken {
         #[flat]
         UpgradeableEvent: UpgradeableComponent::Event,
     }
-
+    
     #[constructor]
-    fn constructor(ref self: ContractState, owner: ContractAddress, name: ByteArray, symbol: ByteArray) {
-        self.erc20.initializer(name, symbol);
+    fn constructor(ref self: ContractState, owner: ContractAddress, name: felt252, symbol: felt252) {
+        let name_arr = name.format_as_byte_array(256);
+        let symbol_arr = symbol.format_as_byte_array(256);  
+        self.erc20.initializer(name_arr, symbol_arr);
         self.ownable.initializer(owner);
     }
 

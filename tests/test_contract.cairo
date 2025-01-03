@@ -1,47 +1,65 @@
-// use starknet::ContractAddress;
+use tax_erc20::contract::v2_pool_factory_interface::{IFactoryDispatcher,IFactoryDispatcherTrait};
+use snforge_std::{declare, ContractClassTrait, DeclareResultTrait};
+use  starknet::{ContractAddress,contract_address_const};
 
-// use snforge_std::{declare, ContractClassTrait, DeclareResultTrait};
+const CONTRACT_ADDRESS: felt252 =
+0x02a93ef8c7679a5f9b1fcf7286a6e1cadf2e9192be4bcb5cb2d1b39062697527;
 
-// use tax_erc20::IHelloStarknetSafeDispatcher;
-// use tax_erc20::IHelloStarknetSafeDispatcherTrait;
-// use tax_erc20::IHelloStarknetDispatcher;
-// use tax_erc20::IHelloStarknetDispatcherTrait;
+#[test]
+#[fork("MAINNET_LATEST")]
+fn test_using_forked_state() {
+    let factory = IFactoryDispatcher {
+        contract_address: CONTRACT_ADDRESS.try_into().unwrap()
+    };
 
-// fn deploy_contract(name: ByteArray) -> ContractAddress {
-//     let contract = declare(name).unwrap().contract_class();
-//     let (contract_address, _) = contract.deploy(@ArrayTrait::new()).unwrap();
-//     contract_address
-// }
+    let tax_token_contract = declare("TaxERC20").unwrap().contract_class();
+    println!("declared Tax token contract", );
+    let stable_contract = declare("USDCarb").unwrap().contract_class();
+    println!("declared stable_contract", );
+    // Alternatively we could use `deploy_syscall` here
+    let stable_address = deploy_erc20();
+    println!("Stable address = {:?}", stable_address);
+    let tax_token_address = deploy_tax_erc20();
+    println!("tax_token address = {:?}", tax_token_address);
 
-// #[test]
-// fn test_increase_balance() {
-//     let contract_address = deploy_contract("HelloStarknet");
+    // Create a Dispatcher object that will allow interacting with the deployed contract
+    let numPoolBefore = factory.num_of_pairs();
+    assert!(numPoolBefore > 0);
+    
+    
+    
+    let pair_address = factory.create_pair(tax_token_address, stable_address);
+    
 
-//     let dispatcher = IHelloStarknetDispatcher { contract_address };
 
-//     let balance_before = dispatcher.get_balance();
-//     assert(balance_before == 0, 'Invalid balance');
 
-//     dispatcher.increase_balance(42);
 
-//     let balance_after = dispatcher.get_balance();
-//     assert(balance_after == 42, 'Invalid balance');
-// }
 
-// #[test]
-// #[feature("safe_dispatcher")]
-// fn test_cannot_increase_balance_with_zero_value() {
-//     let contract_address = deploy_contract("HelloStarknet");
 
-//     let safe_dispatcher = IHelloStarknetSafeDispatcher { contract_address };
+}
 
-//     let balance_before = safe_dispatcher.get_balance().unwrap();
-//     assert(balance_before == 0, 'Invalid balance');
+pub fn deploy_erc20() -> ContractAddress {
+    let contract = declare("USDCarb").expect('Declaration failed').contract_class();
+    let owner: ContractAddress = contract_address_const::<'OWNER'>();
+    let mut calldata: Array<felt252> = array![];
+    calldata.append(owner.into());
+    calldata.append(owner.into());
+    let (contract_address, _) = contract.deploy(@calldata).expect('Erc20 deployment failed');
 
-//     match safe_dispatcher.increase_balance(0) {
-//         Result::Ok(_) => core::panic_with_felt252('Should have panicked'),
-//         Result::Err(panic_data) => {
-//             assert(*panic_data.at(0) == 'Amount cannot be 0', *panic_data.at(0));
-//         }
-//     };
-// }
+    contract_address
+}
+
+pub fn deploy_tax_erc20() -> ContractAddress {
+    let contract = declare("TaxERC20").expect('Declaration failed').contract_class();
+    let owner: ContractAddress = contract_address_const::<'OWNER'>();
+    let mut calldata: Array<felt252> = array![];
+    calldata.append(owner.into());
+    let name = 'Name';
+    let symbol = 'Symbol';
+
+    calldata.append(name);
+    calldata.append(symbol);
+    let (contract_address, _) = contract.deploy(@calldata).expect('Erc20 deployment failed');
+
+    contract_address
+}
