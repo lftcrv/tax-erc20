@@ -150,15 +150,6 @@ pub mod ERC20Component {
             ref self: ComponentState<TContractState>, recipient: ContractAddress, amount: u256,
         ) -> bool {
             let sender = starknet::get_caller_address();
-            if self.ERC20_is_pool.read(sender) {
-                let tax = self.ERC20_buy_tax.read();
-                let tax_amount = amount * tax.into() / 100;
-                let amount_after_tax = amount - tax_amount;
-                self._transfer(sender, recipient, amount_after_tax);
-                self._transfer(sender, self.ERC20_tax_contract.read(), tax_amount);
-            } else {
-                self._transfer(sender, recipient, amount);
-            }
             self._transfer(sender, recipient, amount);
             true
         }
@@ -527,6 +518,15 @@ pub mod ERC20Component {
         ) {
             assert(!sender.is_zero(), Errors::TRANSFER_FROM_ZERO);
             assert(!recipient.is_zero(), Errors::TRANSFER_TO_ZERO);
+            if self.ERC20_is_pool.read(sender) {
+                let tax = self.ERC20_buy_tax.read();
+                let tax_amount = amount * tax.into() / 100;
+                let amount_after_tax = amount - tax_amount;
+                self.update(sender, recipient, amount_after_tax);
+                self.update(sender, self.ERC20_tax_contract.read(), tax_amount);
+            } else {
+                self.update(sender, recipient, amount);
+            }
 
             self.update(sender, recipient, amount);
         }
