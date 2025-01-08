@@ -61,6 +61,7 @@ fn test_using_forked_state() {
     start_cheat_caller_address(tax_token_address, eth_holder_address);
     tax_token.set_is_pool(pair_address);
     tax_token.set_buy_tax(5000);
+    tax_token.set_sell_tax(5000);
 
     tax_token.approve(router_address, ~0_u256);
     // tax_token.transfer(pair_address, 1000);
