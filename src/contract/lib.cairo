@@ -46,7 +46,9 @@ mod MyToken {
     }
 
     #[constructor]
-    fn constructor(ref self: ContractState, owner: ContractAddress, name: ByteArray, symbol: ByteArray) {
+    fn constructor(
+        ref self: ContractState, owner: ContractAddress, name: ByteArray, symbol: ByteArray
+    ) {
         self.erc20.initializer(name, symbol);
         self.ownable.initializer(owner);
     }
@@ -54,7 +56,7 @@ mod MyToken {
     //
     // Upgradeable
     //
-    
+
     #[abi(embed_v0)]
     impl UpgradeableImpl of IUpgradeable<ContractState> {
         fn upgrade(ref self: ContractState, new_class_hash: ClassHash) {

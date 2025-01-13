@@ -4,7 +4,7 @@
 #[starknet::contract]
 mod BondingCurve {
     use openzeppelin_token::erc20::interface::IERC20Mixin;
-use openzeppelin::access::ownable::OwnableComponent;
+    use openzeppelin::access::ownable::OwnableComponent;
     use core::to_byte_array::FormatAsByteArray;
     use cubit::f128::types::fixed::{Fixed, FixedTrait, FixedZero};
     use openzeppelin::token::erc20::{ERC20Component, ERC20HooksEmptyImpl};
@@ -37,8 +37,8 @@ use openzeppelin::access::ownable::OwnableComponent;
 
     #[storage]
     struct Storage {
-        tick_price: u256,
-        starting_price: u256,
+        buy_tax: u16,
+        sell_tax: u16,
         #[substorage(v0)]
         erc20: ERC20Component::Storage,
         #[substorage(v0)]
@@ -53,7 +53,9 @@ use openzeppelin::access::ownable::OwnableComponent;
     const MANTISSA: u256 = 1000000000000000000;
     const MANTISSA_1e9: u256 = 1000000000;
     const ETH: felt252 = 0x049d36570d4e46f48e99674bd3fcc84644ddd6b96f7c741b1562b82f9e004dc7;
-    
+    const LFTCRV_TAX_CONTRACT: felt252 =
+        0x049d36570d4e46f48e99674bd3fcc84644ddd6b96f7c741b1562b82f9e004dc7;
+
 
     #[event]
     #[derive(Drop, starknet::Event)]
@@ -65,11 +67,18 @@ use openzeppelin::access::ownable::OwnableComponent;
     }
     #[constructor]
     fn constructor(
-        ref self: ContractState, _owner: ContractAddress, _name: felt252, _symbol: felt252,
+        ref self: ContractState,
+        _owner: ContractAddress,
+        _name: felt252,
+        _symbol: felt252,
+        buy_tax_percentage_x100: u16,
+        sell_tax_percentage_x100: u16
     ) {
         let (_name, _symbol) = (_name.format_as_byte_array(10), _symbol.format_as_byte_array(10));
         self.erc20.initializer(_name, _symbol);
         self.ownable.initializer(_owner);
+        self.buy_tax.write(buy_tax_percentage_x100);
+        self.sell_tax.write(sell_tax_percentage_x100);
     }
 
     #[generate_trait]
@@ -79,6 +88,15 @@ use openzeppelin::access::ownable::OwnableComponent;
         fn get_current_price(self: @ContractState) -> u256 {
             self.get_price_for_market_cap(self.get_market_cap())
         }
+        #[external(v0)]
+        fn buy_tax_percentage_x100(self: @ContractState) -> u16 {
+            self.buy_tax.read()
+        }
+        #[external(v0)]
+        fn sell_tax_percentage_x100(self: @ContractState) -> u16 {
+            self.sell_tax.read()
+        }
+
 
         #[external(v0)]
         fn get_price_for_market_cap(self: @ContractState, market_cap: u256) -> u256 {
@@ -95,8 +113,7 @@ use openzeppelin::access::ownable::OwnableComponent;
 
             let base = FixedTrait::from_felt(601500000) / mantissa_1e9;
             let exponent: Fixed = FixedTrait::from_felt(EXPONENT_X1E9) / mantissa_1e9;
-            let price_x9: felt252 = (base * euler.pow(market_cap * exponent) * mantissa_1e9)
-                .into();
+            let price_x9: felt252 = (base * euler.pow(market_cap * exponent) * mantissa_1e9).into();
             let price_x9: u256 = price_x9.into();
 
             price_x9 * MANTISSA_1e9
@@ -108,63 +125,104 @@ use openzeppelin::access::ownable::OwnableComponent;
             eth_contract.balance_of(get_contract_address())
         }
 
+
         #[external(v0)]
-        fn simulate_buy(ref self: ContractState, eth_amount: u256) -> u256 {
-            let current_cap = self.get_market_cap();
-            let new_cap = current_cap + eth_amount;
-            let new_price = self.get_price_for_market_cap(new_cap);
-            let old_price = self.get_current_price();
-            println!("[+] old_price {}, new_price {}", old_price, new_price);
-            let av_price = (old_price + new_price) / 2;
-            eth_amount * MANTISSA  / av_price 
+        fn simulate_buy(self: @ContractState, eth_amount: u256) -> u256 {
+            let (ret, _) = self._simulate_buy(eth_amount);
+            ret
         }
+
 
         #[external(v0)]
         fn simulate_sell(ref self: ContractState, token_amount: u256) -> u256 {
-            let current_supply = self.total_supply();
-            assert!(current_supply > token_amount, "Not enough tokens to sell");
-            
-            let current_cap = self.get_market_cap();
-            // Calculate what portion of the supply is being sold
-            let portion = token_amount * MANTISSA / current_supply;
-            // Calculate equivalent market cap reduction
-            let cap_reduction = current_cap * portion / MANTISSA;
-            let new_cap = current_cap - cap_reduction;
-            
-            let new_price = self.get_price_for_market_cap(new_cap);
-            let old_price = self.get_current_price();
-            println!("[+] old_price {}, new_price {}", old_price, new_price);
-            
-            let av_price = (old_price + new_price) / 2;
-            token_amount * av_price / MANTISSA
+            let (taxed_amount, _ ) = self._simulate_sell(token_amount);
+            taxed_amount
         }
         #[external(v0)]
         fn buy(ref self: ContractState, eth_amount: u256) -> u256 {
-            let amount = self.simulate_buy(eth_amount);
+            let (amount, tax_amount) = self._simulate_buy(eth_amount);
             let eth_contract = IERC20Dispatcher { contract_address: ETH.try_into().unwrap() };
             let from: ContractAddress = get_caller_address();
             let to = get_contract_address();
-            let bal = eth_contract.balance_of(from);
-            println!("[+] bal {}", bal);
-            eth_contract.transfer_from(from,to, eth_amount);
-            println!("[+] Actually  mint");
+            eth_contract.transfer_from(from, to, eth_amount);
+            self._transfer_tax(tax_amount);
             self.erc20.mint(get_caller_address(), amount);
             amount
         }
 
         #[external(v0)]
         fn sell(ref self: ContractState, token_amount: u256) -> u256 {
-            let amount = self.simulate_sell(token_amount);
+            let (amount, tax) = self._simulate_sell(token_amount);
+
+            println!("[+] Market cap {}", self.get_market_cap());
+            println!("toSell {}", amount);
             self.erc20.burn(get_caller_address(), token_amount);
             let eth_contract = IERC20Dispatcher { contract_address: ETH.try_into().unwrap() };
-            println!("[+] Market cap {}, toSell {}", self.get_market_cap(), amount);
-            assert!(self.get_market_cap() >= amount, "Not enough eth to sell");
+            assert!(self.get_market_cap() >= amount, "Not enough eth get");
             eth_contract.transfer(get_caller_address(), amount);
+            self._transfer_tax(tax);
             amount
         }
 
-        // fn sell(ref self: ContractState, eth_amount : u256) -> u256 {
+        fn _simulate_buy(self: @ContractState, eth_amount: u256) -> (u256, u256) {
+            println!("-------------------------------\n!!_simulate_buy !! {}", eth_amount);
+            let current_cap = self.get_market_cap();
+            println!("[+] current_cap {}", current_cap);
+            let tax_amount = self._simulate_tax(eth_amount, self.buy_tax.read().into());
+            println!("tax_amount {}", tax_amount);
+            
+            let taxed_amount = eth_amount - tax_amount;
 
-        // }
+            let new_cap = current_cap + taxed_amount;
+            let new_price = self.get_price_for_market_cap(new_cap);
+            let old_price = self.get_current_price();
+            println!("[+] old_price {}, new_price {}", old_price, new_price);
+            let av_price = (old_price + new_price) / 2;
+            (taxed_amount * MANTISSA / av_price , tax_amount)
+        }
+
+
+        fn _simulate_sell(ref self: ContractState, token_amount: u256) -> (u256, u256) {
+            println!("[+] token_amount {}", token_amount);
+            let current_supply = self.total_supply();
+            println!("[+] current_supply {}", current_supply);
+
+            let current_cap = self.get_market_cap();
+            println!("[+] current_cap {}", current_cap);
+            // Calculate what portion of the supply is being sold
+            let portion = token_amount * MANTISSA  / current_supply;
+            println!("[+] portion {}", portion);
+            // Calculate equivalent market cap reduction
+            let cap_reduction = current_cap * portion / MANTISSA;
+            println!("[+] cap_reduction {}", cap_reduction);
+            let new_cap = current_cap - cap_reduction;
+
+            let old_price = self.get_current_price();
+            let new_price = self.get_price_for_market_cap(new_cap);
+            println!("[+] old_price {}, new_price {}", old_price, new_price);
+
+            let av_price = (old_price + new_price) / 2;
+            let  untaxed_amount = 
+            token_amount * av_price / MANTISSA;
+            let tax = self._simulate_tax(untaxed_amount, self.sell_tax.read().into());
+            (untaxed_amount - tax, tax)
+        }
+
+        fn _transfer_tax(self: @ContractState, amount: u256) -> u256 {
+            let eth_contract = IERC20Dispatcher { contract_address: ETH.try_into().unwrap() };
+            eth_contract.transfer(LFTCRV_TAX_CONTRACT.try_into().unwrap(), amount);
+            amount
+        }
+
+        fn _simulate_tax(self: @ContractState, amount: u256, tax_percentage_x100: u256) -> u256 {
+            amount * tax_percentage_x100 / 10000
+        }
     }
+    // #[generate_trait]
+// pub impl InternalImpl<
+//     TContractState,
+//     +Drop<TContractState>,
+// > of InternalTrait<TContractState> {
+
+    // }
 }

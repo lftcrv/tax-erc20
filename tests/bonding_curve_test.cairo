@@ -56,13 +56,13 @@ fn test_bonding_curve() {
 
     let tokens_to_receive = bonding.simulate_buy(eth_amount);
     println!("[*] Simulated tokens for 1 ETH: {}", tokens_to_receive);
-    
+
     // Approve and buy
     println!("[*] Approving and buying tokens...");
     start_cheat_caller_address(eth_address, eth_holder_address);
     eth.approve(bonding_address, ~0_u256);
     stop_cheat_caller_address(eth_address);
-    
+
     // Execute buy
     println!("[+] Actually  test_simulate_buy");
     bonding.get_price_for_market_cap(eth_amount);
@@ -72,12 +72,12 @@ fn test_bonding_curve() {
     stop_cheat_caller_address(eth_address);
     println!("[+] Actually bought tokens: {}", bought_tokens);
     assert!(bought_tokens == tokens_to_receive, "Bought tokens don't match simulation");
-    
+
     // Test sell simulation
-    let sell_amount = bought_tokens / 2; // Sell half
+    let sell_amount = bought_tokens; // Sell half
     let eth_to_receive = bonding.simulate_sell(sell_amount);
     println!("[*] Simulated ETH return for {} tokens: {}", sell_amount, eth_to_receive);
-    
+
     // Execute sell
     start_cheat_caller_address(bonding_address, eth_holder_address);
     let received_eth = bonding.sell(sell_amount);
@@ -95,8 +95,10 @@ fn deploy_bonding_curve() -> ContractAddress {
     println!("[*] Preparing deployment calldata...");
     let calldata: Array<felt252> = array![
         ETH_HOLDER.into(), // owner
-         'BondingCurve'.into(), // name
-         'BCURVE'.into(), // symbol
+        'BondingCurve'.into(), // name
+        'BCURVE'.into(),
+        100,
+        300 // symbol
     ];
 
     println!("[*] Deploying BondingCurve...");
