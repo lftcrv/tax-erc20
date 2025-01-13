@@ -41,7 +41,7 @@ fn test_bonding_curve() {
     // Deploy bonding curve
     println!("[*] Deploying Bonding Curve contract...");
     let bonding_address = deploy_bonding_curve();
-    println!("[+] Bonding Curve deployed at: {:?}", bonding_address);
+    // println!("[+] Bonding Curve deployed at: {:x}", bonding_address);
     let bonding = IBondingCurveDispatcher { contract_address: bonding_address };
 
     // Test initial price
@@ -60,13 +60,14 @@ fn test_bonding_curve() {
     // Approve and buy
     println!("[*] Approving and buying tokens...");
     start_cheat_caller_address(eth_address, eth_holder_address);
-    eth.approve(bonding_address, eth_amount);
+    eth.approve(bonding_address, ~0_u256);
     stop_cheat_caller_address(eth_address);
     
     // Execute buy
     println!("[+] Actually  test_simulate_buy");
     bonding.get_price_for_market_cap(eth_amount);
-    start_cheat_caller_address(eth_address, eth_holder_address);
+    println!("[*] Actually buy tokens");
+    start_cheat_caller_address(bonding_address, eth_holder_address);
     let bought_tokens = bonding.buy(eth_amount);
     stop_cheat_caller_address(eth_address);
     println!("[+] Actually bought tokens: {}", bought_tokens);
