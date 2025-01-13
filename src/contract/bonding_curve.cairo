@@ -3,7 +3,8 @@
 
 #[starknet::contract]
 mod BondingCurve {
-    use openzeppelin::access::ownable::OwnableComponent;
+    use openzeppelin_token::erc20::interface::IERC20Mixin;
+use openzeppelin::access::ownable::OwnableComponent;
     use core::to_byte_array::FormatAsByteArray;
     use cubit::f128::types::fixed::{Fixed, FixedTrait, FixedZero};
     use openzeppelin::token::erc20::{ERC20Component, ERC20HooksEmptyImpl};
@@ -52,6 +53,7 @@ mod BondingCurve {
     const MANTISSA: u256 = 1000000000000000000;
     const MANTISSA_1e9: u256 = 1000000000;
     const ETH: felt252 = 0x049d36570d4e46f48e99674bd3fcc84644ddd6b96f7c741b1562b82f9e004dc7;
+    
 
     #[event]
     #[derive(Drop, starknet::Event)]
@@ -85,25 +87,16 @@ mod BondingCurve {
             }
             let market_cap_in_gwei: u256 = market_cap / 1000000000_u256;
             let market_cap_in_gwei: felt252 = market_cap_in_gwei.try_into().unwrap();
-            println!("[+] market_cap_in_gwei {}", market_cap_in_gwei);
             let market_cap_in_gwei: Fixed = FixedTrait::from_felt(market_cap_in_gwei);
 
             let mantissa_1e9: Fixed = FixedTrait::from_felt(1000000000);
             let market_cap: Fixed = market_cap_in_gwei / mantissa_1e9;
-
-            println!("[+] euler");
             let euler: Fixed = FixedTrait::from_felt(271828) / FixedTrait::from_felt(100000);
 
-            println!("[+] base");
-
             let base = FixedTrait::from_felt(601500000) / mantissa_1e9;
-            println!("[+] exponent");
             let exponent: Fixed = FixedTrait::from_felt(EXPONENT_X1E9) / mantissa_1e9;
-            println!("[+] price_x9 ");
             let price_x9: felt252 = (base * euler.pow(market_cap * exponent) * mantissa_1e9)
-                .floor()
                 .into();
-            println!("[+] price_x9");
             let price_x9: u256 = price_x9.into();
 
             price_x9 * MANTISSA_1e9
@@ -128,21 +121,33 @@ mod BondingCurve {
 
         #[external(v0)]
         fn simulate_sell(ref self: ContractState, token_amount: u256) -> u256 {
+            let current_supply = self.total_supply();
+            assert!(current_supply > token_amount, "Not enough tokens to sell");
+            
             let current_cap = self.get_market_cap();
-            let new_cap = current_cap - token_amount;
+            // Calculate what portion of the supply is being sold
+            let portion = token_amount * MANTISSA / current_supply;
+            // Calculate equivalent market cap reduction
+            let cap_reduction = current_cap * portion / MANTISSA;
+            let new_cap = current_cap - cap_reduction;
+            
             let new_price = self.get_price_for_market_cap(new_cap);
             let old_price = self.get_current_price();
             println!("[+] old_price {}, new_price {}", old_price, new_price);
+            
             let av_price = (old_price + new_price) / 2;
-
             token_amount * av_price / MANTISSA
         }
-
         #[external(v0)]
         fn buy(ref self: ContractState, eth_amount: u256) -> u256 {
             let amount = self.simulate_buy(eth_amount);
             let eth_contract = IERC20Dispatcher { contract_address: ETH.try_into().unwrap() };
-            eth_contract.transfer(get_contract_address(), amount);
+            let from: ContractAddress = get_caller_address();
+            let to = get_contract_address();
+            let bal = eth_contract.balance_of(from);
+            println!("[+] bal {}", bal);
+            eth_contract.transfer_from(from,to, eth_amount);
+            println!("[+] Actually  mint");
             self.erc20.mint(get_caller_address(), amount);
             amount
         }
@@ -151,8 +156,13 @@ mod BondingCurve {
         fn sell(ref self: ContractState, token_amount: u256) -> u256 {
             let amount = self.simulate_sell(token_amount);
             self.erc20.burn(get_caller_address(), token_amount);
+            let eth_contract = IERC20Dispatcher { contract_address: ETH.try_into().unwrap() };
+            println!("[+] Market cap {}, toSell {}", self.get_market_cap(), amount);
+            assert!(self.get_market_cap() >= amount, "Not enough eth to sell");
+            eth_contract.transfer(get_caller_address(), amount);
             amount
         }
+
         // fn sell(ref self: ContractState, eth_amount : u256) -> u256 {
 
         // }
