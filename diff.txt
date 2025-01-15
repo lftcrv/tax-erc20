@@ -1,0 +1,3 @@
+diff_price_rounded = 18024058613159;
+diff_mkcap_rounded = 18029999920585;
+diff_all_rounder = 18024058613159;
