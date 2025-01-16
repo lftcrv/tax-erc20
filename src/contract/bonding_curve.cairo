@@ -35,8 +35,8 @@ mod BondingCurve {
         0x049ff5b3a7d38e2b50198f408fa8281635b5bc81ee49ab87ac36c8324c214427;
 
     // Bonding curve parameters
-    const BASE_X1E9: felt252 = 125000000;
-    const EXPONENT_X1E9: felt252 = 3000;
+    const BASE_X1E9: felt252 = 12500000;
+    const EXPONENT_X1E9: felt252 = 613020;
 
     const SCALING_FACTOR: u256 = 18446744073709552000; // 2^64
     const MAX_SUPPLY: u256 = 1000000000 * MANTISSA_1e6;
@@ -130,14 +130,15 @@ mod BondingCurve {
         // Price calculation functions
         #[external(v0)]
         fn get_price_for_market_cap(self: @ContractState, market_cap: u256) -> u256 {
-            let (mantissa_1e9, base_normalized, exponent_normalized) = self
-                ._normalize_data(market_cap);
+            let (_, base_normalized, exponent_normalized) = self._normalize_data(market_cap);
+            let mantissa_1e6: Fixed = FixedTrait::from_unscaled_felt(
+                MANTISSA_1e6.try_into().unwrap()
+            );
 
             let market_cap_normalized: Fixed = FixedTrait::from_unscaled_felt(
                 market_cap.try_into().unwrap()
             )
-                * 10_u16.into()
-                / mantissa_1e9;
+                / mantissa_1e6;
 
             self._calculate_price(base_normalized, market_cap_normalized, exponent_normalized)
         }
@@ -170,6 +171,11 @@ mod BondingCurve {
         fn simulate_sell(self: @ContractState, token_amount: u256) -> u256 {
             let (taxed_amount, _) = self._simulate_sell(token_amount);
             taxed_amount
+        }
+
+        #[external(v0)]
+        fn get_taxes(self: @ContractState) -> (u16, u16) {
+            (self.buy_tax.read().into(), self.sell_tax.read().into())
         }
 
         // Trading functions
@@ -300,12 +306,20 @@ mod BondingCurve {
         fn _calculate_price(
             self: @ContractState, base: Fixed, market_cap: Fixed, exponent: Fixed
         ) -> u256 {
-            let mantissa_1e9: Fixed = FixedTrait::from_unscaled_felt(
-                MANTISSA_1e9.try_into().unwrap()
-            );
-            let exp_result = (market_cap * exponent).exp();
-            let ret_x9_scaled: felt252 = (base * exp_result * mantissa_1e9).round().into();
-            ret_x9_scaled.into() / SCALING_FACTOR * MANTISSA_1e9
+            // let mantissa_1e9: Fixed = FixedTrait::from_unscaled_felt(
+            //     MANTISSA_1e9.try_into().unwrap()
+            // );
+
+
+            // let exp_result = (market_cap * exponent).exp();
+            // println!("exp_result: {}", (exp_result * 100_u8.into()).mag.into() / SCALING_FACTOR);
+            
+            // let ret_x9_scaled: felt252 = (base * exp_result * mantissa_1e9).round().into();
+            // let ret_x9_unscaled: u256 = ret_x9_scaled.into() / SCALING_FACTOR;
+            // let ret = ret_x9_unscaled * MANTISSA_1e9;
+            // println!("ret: {}", ret);
+            // ret;
+            ~0_u256
         }
 
         fn _calculate_market_cap(
