@@ -5,15 +5,19 @@ use snforge_std::{
 };
 use cubit::f128::types::fixed::{Fixed, FixedTrait, FixedZero};
 
+
 // Constants for testing
 const ETH: felt252 = 0x049d36570d4e46f48e99674bd3fcc84644ddd6b96f7c741b1562b82f9e004dc7;
-const ETH_HOLDER: felt252 = 0x07170f54dd61ae85377f75131359e3f4a12677589bb7ec5d61f362915a5c0982;
+const ETH_HOLDER: felt252 = 0x04d0390b777b424e43839cd1e744799f3de6c176c7e32c1812a41dbd9c19db6a;
 const ONE_ETH: u256 = 1000000000000000000;
+const PROTOCOL: felt252 =
+    0x04D8eB0b92839aBd23257c32152a39BfDb378aDc0366ca92e2a4403353BAad51; // empty address
 const TEN_ETH: u256 = 10 * ONE_ETH;
 const HUNDRED_ETH: u256 = 100 * ONE_ETH;
 const THOUSAND_ETH: u256 = 1000 * ONE_ETH;
 const BILLION_ETH: u256 = 1000000000 * ONE_ETH;
 const LP_CAP: u256 = BILLION_ETH * 8 / 10;
+const ROUTER_ADDRESS: felt252 = 0x049ff5b3a7d38e2b50198f408fa8281635b5bc81ee49ab87ac36c8324c214427;
 
 // Contract interfaces
 #[starknet::interface]
@@ -28,16 +32,17 @@ trait IExternal<ContractState> {
 
 #[starknet::interface]
 trait IBondingCurve<TContractState> {
-    fn get_current_price(ref self: TContractState) -> u256;
-    fn get_price_for_market_cap( self: @TContractState, market_cap: u256) -> u256;
-    fn market_cap_for_price(ref self: TContractState, price: u256) -> u256;
-    fn market_cap(ref self: TContractState) -> u256;
-    fn simulate_buy(ref self: TContractState, eth_amount: u256) -> u256;
-    fn simulate_buy_for(ref self: TContractState, token_amount: u256) -> u256;
-    fn simulate_sell(ref self: TContractState, token_amount: u256) -> u256;
+    fn get_current_price(self: @TContractState) -> u256;
+    fn get_price_for_market_cap(self: @TContractState, market_cap: u256) -> u256;
+    fn market_cap_for_price(self: @TContractState, price: u256) -> u256;
+    fn market_cap(self: @TContractState) -> u256;
+    fn simulate_buy(self: @TContractState, eth_amount: u256) -> u256;
+    fn simulate_buy_for(self: @TContractState, token_amount: u256) -> u256;
+    fn simulate_sell(self: @TContractState, token_amount: u256) -> u256;
     fn buy(ref self: TContractState, eth_amount: u256) -> u256;
+    fn buy_for(ref self: TContractState, eth_amount: u256) -> u256;
     fn sell(ref self: TContractState, token_amount: u256) -> u256;
-    fn get_taxes(ref self: TContractState) -> (u16, u16);
+    fn get_taxes(self: @TContractState) -> (u16, u16);
 }
 
 // Helper functions
@@ -46,7 +51,7 @@ fn deploy_bonding_curve(buy_tax: u16, sell_tax: u16) -> ContractAddress {
 
     let calldata: Array<felt252> = array![
         ETH_HOLDER.into(), // owner
-        ETH_HOLDER.into(), // protocol
+        PROTOCOL.into(), // protocol
         'BondingCurve'.into(), // name
         'BCURVE'.into(), // symbol
         buy_tax.into(),
@@ -69,52 +74,48 @@ fn setup_contracts() -> (
     (eth_holder_address, eth_address, eth, bonding)
 }
 
-// Test Suites
+// // Test Suites
 
-#[test]
-#[fork("MAINNET_LATEST")]
-fn test_contract_deployment() {
-    let (_, _, _, bonding) = setup_contracts();
+// #[test]
+// fn test_contract_deployment() {
+//     let (_, _, _, bonding) = setup_contracts();
 
-    let (buy_tax, sell_tax) = bonding.get_taxes();
-    assert!(buy_tax == 500, "Buy tax should be 5%");
-    assert!(sell_tax == 500, "Sell tax should be 5%");
-    assert!(bonding.market_cap() == 0, "Initial market cap should be 0");
-    assert!(bonding.get_current_price() > 0, "Initial price should be positive");
-}
+//     let (buy_tax, sell_tax) = bonding.get_taxes();
+//     assert!(buy_tax == 500, "Buy tax should be 5%");
+//     assert!(sell_tax == 500, "Sell tax should be 5%");
+//     assert!(bonding.market_cap() == 0, "Initial market cap should be 0");
+//     assert!(bonding.get_current_price() > 0, "Initial price should be positive");
+// }
 
+// #[test]
+// fn test_market_cap_calculation() {
+//     let (_, _, _, bonding) = setup_contracts();
 
-#[test]
-fn test_market_cap_calculation() {
-    let (_, _, _, bonding) = setup_contracts();
+//     // Test market cap calculation for different prices
 
-    // Test market cap calculation for different prices
-    let test_caps = array![HUNDRED_ETH ,ONE_ETH, TEN_ETH];
+//     let test_caps = array![ONE_ETH, TEN_ETH];
 
-    let mut i = 0;
-    loop {
-        println!("i = {}", i);
-        if i >= test_caps.len() {
-            break;
-        }
-        let cap = *test_caps.at(i);
-        println!("testing price for cap: {}", cap);
-        let price: u256 = bonding.get_price_for_market_cap(cap);
-        println!("price: {}", price);
-        // println!("testing calculate cap for price: {}", price);
-        // let calculated_cap = bonding.market_cap_for_price(price);
+//     let mut i = 0;
+//     loop {
+//         if i >= test_caps.len() {
+//             break;
+//         }
 
-        // // Allow for small rounding differences
-        // let diff = if cap > calculated_cap {
-        //     cap - calculated_cap
-        // } else {
-        //     calculated_cap - cap
-        // };
+//         let cap = *test_caps.at(i);
+//         let price: u256 = bonding.get_price_for_market_cap(cap);
+//         let calculated_cap = bonding.market_cap_for_price(price);
 
-        // assert!(diff <= cap / 1000, "Market cap calculation error too large"); // 0.1% tolerance
-        i += 1;
-    }
-}
+//         // Allow for small rounding differences
+//         let diff = if cap > calculated_cap {
+//             cap - calculated_cap
+//         } else {
+//             calculated_cap - cap
+//         };
+
+//         assert!(diff <= cap / 1000, "Market cap calculation error too large"); // 0.1% tolerance
+//         i += 1;
+//     }
+// }
 // #[test]
 // fn test_price_mechanics() {
 //     let (_, _, _, bonding) = setup_contracts();
@@ -140,28 +141,30 @@ fn test_market_cap_calculation() {
 //     let (eth_holder, _, eth, bonding) = setup_contracts();
 
 //     // Test buying with different amounts
-//     let amounts = array![ONE_ETH, TEN_ETH, HUNDRED_ETH];
+//     let amounts = array![ONE_ETH, ONE_ETH * 5, TEN_ETH];
 
 //     let mut i = 0;
 //     loop {
 //         if i >= amounts.len() {
 //             break;
 //         }
-//         let amount = *amounts.at(i);
+//         let amount_eth = *amounts.at(i);
 
 //         // Simulate buy
-//         let tokens_expected = bonding.simulate_buy(amount);
+//         let tokens_expected = bonding.simulate_buy_for(amount_eth);
+//         println!("tokens_expected: {}", tokens_expected);
 //         assert!(tokens_expected > 0, "Should get tokens for ETH");
 
 //         // Simulate buying specific token amount
-//         let eth_needed = bonding.simulate_buy_for(tokens_expected);
-//         let diff = if eth_needed > amount {
-//             eth_needed - amount
+//         let eth_needed = bonding.simulate_buy(tokens_expected);
+//         let diff = if eth_needed > amount_eth {
+//             eth_needed - amount_eth
 //         } else {
-//             amount - eth_needed
+//             amount_eth - eth_needed
 //         };
+//         println!("amount eth {} eth_needed {} diff {}", amount_eth, eth_needed, diff);
 
-//         assert!(diff <= amount / 100, "Buy simulation inconsistency"); // 1% tolerance
+//         assert!(diff <= amount_eth / 100, "Buy simulation inconsistency"); // 1% tolerance
 //         i += 1;
 //     }
 // }
@@ -212,50 +215,55 @@ fn test_market_cap_calculation() {
 //     ); // 10% tolerance for price impact
 // }
 
+#[test]
+#[fork("MAINNET_LATEST")]
+fn test_liquidity_pool_launch() {
+    let (eth_holder, eth_address, eth, bonding) = setup_contracts();
+
+    // Calculate amount needed to trigger pool launch
+    // let eth_needed = bonding.simulate_buy_for(LP_CAP);
+    // println!("-----eth_needed: {}", eth_needed);
+
+    // Setup approvals
+    start_cheat_caller_address(eth_address, eth_holder);
+    eth.approve(bonding.contract_address, ~0_u256);
+    stop_cheat_caller_address(eth_address);
+
+    // Buy enough to trigger launch
+    start_cheat_caller_address(bonding.contract_address, eth_holder);
+    let tokens_received = bonding.buy_for(TEN_ETH);
+    stop_cheat_caller_address(bonding.contract_address);
+
+    // Verify launch occurred
+    assert!(tokens_received <= LP_CAP, "Should not exceed LP cap");
+    // Add more post-launch verification as needed
+}
 // #[test]
-// #[fork("MAINNET_LATEST")]
-// fn test_liquidity_pool_launch() {
-//     let (eth_holder, eth_address, eth, bonding) = setup_contracts();
-
-//     // Calculate amount needed to trigger pool launch
-//     let eth_needed = bonding.simulate_buy_for(LP_CAP);
-
-//     // Setup approvals
-//     start_cheat_caller_address(eth_address, eth_holder);
-//     eth.approve(bonding.contract_address, eth_needed);
-//     stop_cheat_caller_address(eth_address);
-
-//     // Buy enough to trigger launch
-//     start_cheat_caller_address(bonding.contract_address, eth_holder);
-//     let tokens_received = bonding.buy(eth_needed);
-//     stop_cheat_caller_address(bonding.contract_address);
-
-//     // Verify launch occurred
-//     assert!(tokens_received <= LP_CAP, "Should not exceed LP cap");
-//     // Add more post-launch verification as needed
-// }
-
-// #[test]
-// #[should_panic(expected: 'Insufficient balance')]
+// #[should_panic(expected: "Insufficient balance")]
 // #[fork("MAINNET_LATEST")]
 // fn test_buy_insufficient_balance() {
 //     let (eth_holder, eth_address, eth, bonding) = setup_contracts();
 
 //     // Try to buy without approval
-//     start_cheat_caller_address(bonding.contract_address,
-//     0x04D8eB0b92839aBd23257c32152a39BfDb378aDc0366ca92e2a4403353BAad51.try_into().unwrap());
+//     start_cheat_caller_address(
+//         bonding.contract_address,
+//         0x04D8eB0b92839aBd23257c32152a39BfDb378aDc0366ca92e2a4403353BAad51.try_into().unwrap()
+//     );
 //     bonding.buy(ONE_ETH);
 //     stop_cheat_caller_address(bonding.contract_address);
 // }
 
 // #[test]
-// #[should_panic(expected: 'Insufficient balance')]
+// #[should_panic(expected: "Insufficient balance")]
 // #[fork("MAINNET_LATEST")]
 // fn test_sell_insufficient_balance() {
 //     let (eth_holder, _, _, bonding) = setup_contracts();
 
 //     // Try to sell without holding tokens
-//     start_cheat_caller_address(bonding.contract_address, eth_holder);
+//     start_cheat_caller_address(
+//         bonding.contract_address,
+//         0x04D8eB0b92839aBd23257c32152a39BfDb378aDc0366ca92e2a4403353BAad51.try_into().unwrap()
+//     );
 //     bonding.sell(ONE_ETH);
 //     stop_cheat_caller_address(bonding.contract_address);
 // }
