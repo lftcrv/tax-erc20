@@ -78,17 +78,10 @@ fn test_bonding_curve() {
     // Test buy simulation
     println!("Testing buy to liquidation eth needed");
     let eth_amount_lp = bonding.simulate_buy_for(LP_CAP);
-    println!(
-        "Eth amount needed {}",
-        eth_amount_lp
-    );
+    println!("Eth amount needed {}", eth_amount_lp);
     println!("Testing simulatebuy liquidation price");
     let tokens_to_receive = bonding.simulate_buy(eth_amount_lp / 10);
-    println!(
-        "diff {}",
-        LP_CAP - tokens_to_receive
-    );
-
+    println!("diff {}", LP_CAP - tokens_to_receive);
 
     // Execute buy
 
