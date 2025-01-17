@@ -8,7 +8,7 @@ use cubit::f128::types::fixed::{Fixed, FixedTrait, FixedZero};
 
 // Constants for testing
 const ETH: felt252 = 0x049d36570d4e46f48e99674bd3fcc84644ddd6b96f7c741b1562b82f9e004dc7;
-const ETH_HOLDER: felt252 = 0x04d0390b777b424e43839cd1e744799f3de6c176c7e32c1812a41dbd9c19db6a;
+const ETH_HOLDER: felt252 = 0x0213c67ed78bc280887234fe5ed5e77272465317978ae86c25a71531d9332a2d;
 const ONE_ETH: u256 = 1000000000000000000;
 const PROTOCOL: felt252 =
     0x04D8eB0b92839aBd23257c32152a39BfDb378aDc0366ca92e2a4403353BAad51; // empty address
@@ -43,6 +43,7 @@ trait IBondingCurve<TContractState> {
     fn buy_for(ref self: TContractState, eth_amount: u256) -> u256;
     fn sell(ref self: TContractState, token_amount: u256) -> u256;
     fn get_taxes(self: @TContractState) -> (u16, u16);
+    fn approve(ref self: TContractState, spender: ContractAddress, amount: u256);
 }
 
 // Helper functions
@@ -69,6 +70,9 @@ fn setup_contracts() -> (
     let eth_address: ContractAddress = ETH.try_into().unwrap();
     let eth = IExternalDispatcher { contract_address: eth_address };
     let bonding_address = deploy_bonding_curve(500, 500); // 5% taxes
+    let felt252_bonding_address: felt252 = bonding_address.into();
+
+    println!("bonding_address: {}", felt252_bonding_address);
     let bonding = IBondingCurveDispatcher { contract_address: bonding_address };
 
     (eth_holder_address, eth_address, eth, bonding)
@@ -227,10 +231,13 @@ fn test_liquidity_pool_launch() {
     // Setup approvals
     start_cheat_caller_address(eth_address, eth_holder);
     eth.approve(bonding.contract_address, ~0_u256);
+    eth.approve(ROUTER_ADDRESS.try_into().unwrap(), ~0_u256);
     stop_cheat_caller_address(eth_address);
 
     // Buy enough to trigger launch
     start_cheat_caller_address(bonding.contract_address, eth_holder);
+    bonding.approve(ROUTER_ADDRESS.try_into().unwrap(), ~0_u256);
+
     let tokens_received = bonding.buy_for(TEN_ETH);
     stop_cheat_caller_address(bonding.contract_address);
 

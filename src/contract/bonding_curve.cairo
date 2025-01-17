@@ -17,6 +17,7 @@ mod BondingCurve {
     // Local imports
     use crate::contract::interfaces::{
         IRouterDispatcher, IRouterDispatcherTrait, IFactoryDispatcher, IFactoryDispatcherTrait,
+        IPairDispatcher, IPairDispatcherTrait
     };
     use cubit::f128::types::fixed::{Fixed, FixedTrait, FixedZero};
 
@@ -250,8 +251,10 @@ mod BondingCurve {
             market_cap_scaled.into() * MANTISSA_1e9 / SCALING_FACTOR
         }
         // Trading functions
+        // Highly unoptimised
         #[external(v0)]
         fn buy(ref self: ContractState, token_amount: u256) -> u256 {
+            self.require_in_bond_stage(true);
             let eth_contract = IERC20MixinDispatcher { contract_address: ETH.try_into().unwrap() };
             let (eth_amount, tax_amount) = self._simulate_buy(token_amount);
             assert!(
@@ -279,6 +282,7 @@ mod BondingCurve {
 
         #[external(v0)]
         fn buy_for(ref self: ContractState, eth_amount: u256) -> u256 {
+            self.require_in_bond_stage(true);
             println!("--------- buy_for begin -----------");
             let eth_contract = IERC20MixinDispatcher { contract_address: ETH.try_into().unwrap() };
             assert!(
@@ -350,43 +354,6 @@ mod BondingCurve {
 
             amount
         }
-
-        fn _launch_pool(ref self: ContractState,) {
-            let this_address = get_contract_address();
-            self.erc20.mint(this_address, LP_SUPPLY);
-            let eth_address = ETH.try_into().expect('ETH address is invalid');
-            let router_address = ROUTER_ADDRESS.try_into().expect('Router address is invalid');
-
-            let eth_contract = IERC20MixinDispatcher { contract_address: eth_address };
-            let factory_contract = IFactoryDispatcher {
-                contract_address: FACTORY_ADDRESS.try_into().expect('Factory address is invalid')
-            };
-            let router_contract = IRouterDispatcher { contract_address: router_address };
-            println!("create_pair");
-            let pair_address = factory_contract.create_pair(eth_address, this_address);
-            println!("pair_address");
-
-            let market_cap = self.market_cap();
-            let bal:u256 = eth_contract.balance_of(this_address);
-            println!("market_cap: {}. Balance {}", market_cap, bal);
-            // assert!(market_cap < bal, "Not possible");
-            eth_contract.approve(router_address, ~0_u256);
-            self.erc20.approve(router_address, ~0_u256);
-            println!(" market_cap: {}, LP_SUPPLY {}", market_cap, LP_SUPPLY);
-            println!("Price_at_0: {}", self.get_price_for_market_cap(0));
-            println!("price: {}", self.get_current_price());
-            println!("add_liquidity");
-            
-            let (_amount_a, _amount_b, _amount_lp) = router_contract
-                .add_liquidity(
-                    pair_address, bal, LP_SUPPLY, 1, 1, self.creator.read(), ~0_64
-                );
-            println!("transfer tax");
-            self._transfer_tax(eth_contract.balance_of(this_address));
-            self.is_bond_closed.write(true);
-        }
-
-        // Helper function to execute buy transaction
         fn _execute_buy(
             ref self: ContractState,
             eth_amount: u256,
@@ -395,11 +362,58 @@ mod BondingCurve {
             from: ContractAddress,
         ) {
             let eth_contract = IERC20MixinDispatcher { contract_address: ETH.try_into().unwrap() };
-            eth_contract.transfer_from(from, get_contract_address(), eth_amount);
+            eth_contract.transfer_from(from, get_contract_address(), eth_amount + tax_amount);
             self._transfer_tax(tax_amount);
             self._increase_market_cap(eth_amount);
             self.erc20.mint(from, mint_amount);
         }
+
+        fn _launch_pool(ref self: ContractState,) {
+            let this_address = get_contract_address();
+            let this_address_felt: felt252 = this_address.into();
+            println!("this_address: {}", this_address_felt);
+            self.erc20.mint(this_address, LP_SUPPLY);
+            let eth_address = ETH.try_into().expect('ETH address is invalid');
+            let router_address = ROUTER_ADDRESS.try_into().expect('Router address is invalid');
+            let factory_address = FACTORY_ADDRESS.try_into().expect('Factory address is invalid');
+
+            let eth_contract = IERC20MixinDispatcher { contract_address: eth_address };
+            let factory_contract = IFactoryDispatcher { contract_address: factory_address, };
+            let router_contract = IRouterDispatcher { contract_address: router_address };
+
+            let pair_address = factory_contract.create_pair(eth_address, this_address);
+
+            println!("pair_address");
+
+            let market_cap = self.market_cap();
+
+            eth_contract.approve(router_address, ~0_u256);
+            self.erc20._approve(this_address, router_address, ~0_u256);
+            //DEBUG
+            let allowance: u256 = self.erc20.allowance(this_address, router_address);
+            let allowance_eth: u256 = eth_contract.allowance(this_address, router_address);
+            println!("allowance: {}, allowance_eth {}", allowance, allowance_eth);
+            println!("add_liquidity");
+            //
+
+            let (_amount_a, _amount_b, _amount_lp) = router_contract
+                .add_liquidity(pair_address, market_cap, LP_SUPPLY, 1, 1, this_address, ~0_64);
+            println!("liquidity added");
+            let rests = eth_contract.balance_of(this_address);
+            if rests > 0 {
+                self._transfer_tax(eth_contract.balance_of(this_address));
+            }
+            self.is_bond_closed.write(true);
+        }
+        fn require_in_bond_stage(self: @ContractState, is_it: bool)  {
+            let is_bond_closed = self.is_bond_closed.read();
+            if is_it {
+                assert!(is_bond_closed, "Bonding stage is closed");
+            } else {
+                assert!(!is_bond_closed, "Bonding stage is open");
+            }
+        }
+
         // Internal calculation functions
         fn _calculate_price(
             self: @ContractState, base: Fixed, market_cap: Fixed, exponent: Fixed
