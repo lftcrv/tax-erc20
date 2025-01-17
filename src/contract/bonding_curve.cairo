@@ -535,8 +535,7 @@ mod BondingCurve {
         }
     }
 
-
-/// Hooks
+    /// Hooks
     impl ERC20Hooks of ERC20Component::ERC20HooksTrait<ContractState> {
         fn before_update(
             ref self: ERC20Component::ComponentState<ContractState>,
