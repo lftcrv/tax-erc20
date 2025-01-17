@@ -240,20 +240,20 @@ fn test_liquidity_pool_launch() {
     assert!(tokens_received <= LP_CAP, "Should not exceed LP cap");
 
 }
-// #[test]
-// #[should_panic(expected: "Insufficient balance")]
-// #[fork("MAINNET_LATEST")]
-// fn test_buy_insufficient_balance() {
-//     let (eth_holder, eth_address, eth, bonding) = setup_contracts();
+#[test]
+#[should_panic(expected: "Insufficient balance")]
+#[fork("MAINNET_LATEST")]
+fn test_buy_insufficient_balance() {
+    let (eth_holder, eth_address, eth, bonding) = setup_contracts();
 
-//     // Try to buy without approval
-//     start_cheat_caller_address(
-//         bonding.contract_address,
-//         0x04D8eB0b92839aBd23257c32152a39BfDb378aDc0366ca92e2a4403353BAad51.try_into().unwrap()
-//     );
-//     bonding.buy(ONE_ETH);
-//     stop_cheat_caller_address(bonding.contract_address);
-// }
+    // Try to buy without approval
+    start_cheat_caller_address(
+        bonding.contract_address,
+        0x04D8eB0b92839aBd23257c32152a39BfDb378aDc0366ca92e2a4403353BAad51.try_into().unwrap()
+    );
+    bonding.buy(ONE_ETH);
+    stop_cheat_caller_address(bonding.contract_address);
+}
 
 // #[test]
 // #[should_panic(expected: "Insufficient balance")]
