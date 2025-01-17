@@ -536,23 +536,19 @@ mod BondingCurve {
     }
 
     /// Hooks
-    impl ERC20Hooks of ERC20Component::ERC20HooksTrait<ContractState> {
+    pub impl ERC20Hooks of ERC20Component::ERC20HooksTrait<ContractState> {
         fn before_update(
             ref self: ERC20Component::ComponentState<ContractState>,
             from: ContractAddress,
             recipient: ContractAddress,
             amount: u256
-        ) {
-            assert!(false, "ERC20: transfer is disabled");
-        }
+        ) {}
 
         fn after_update(
             ref self: ERC20Component::ComponentState<ContractState>,
             from: ContractAddress,
             recipient: ContractAddress,
             amount: u256
-        ) {
-            assert!(false, "ERC20: transfer is disabled");
-        }
+        ) {}
     }
 }

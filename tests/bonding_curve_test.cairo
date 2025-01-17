@@ -3,7 +3,7 @@ use snforge_std::{
     declare, ContractClassTrait, DeclareResultTrait, start_cheat_caller_address,
     stop_cheat_caller_address,
 };
-use cubit::f128::types::fixed::{Fixed, FixedTrait, FixedZero};
+use cubit::f128::types::fixed::{FixedZero};
 
 
 // Constants for testing
