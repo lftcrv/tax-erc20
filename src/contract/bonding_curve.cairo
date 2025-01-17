@@ -35,8 +35,8 @@ mod BondingCurve {
         0x049ff5b3a7d38e2b50198f408fa8281635b5bc81ee49ab87ac36c8324c214427;
 
     // Bonding curve parameters
-    const BASE_X1E9: felt252 = 35382353;
-    const EXPONENT_X1E9: felt252 = 613020;
+    const BASE_X1E9: felt252 = 10;
+    const EXPONENT_X1E9: felt252 = 6130200;
 
     const SCALING_FACTOR: u256 = 18446744073709552000; // 2^64
     const MAX_SUPPLY: u256 = 1000000000 * MANTISSA_1e6;
@@ -280,6 +280,10 @@ mod BondingCurve {
         #[external(v0)]
         fn buy_for(ref self: ContractState, eth_amount: u256) -> u256 {
             println!("--------- buy_for begin -----------");
+            let eth_contract = IERC20MixinDispatcher { contract_address: ETH.try_into().unwrap() };
+            assert!(
+                eth_contract.balance_of(get_caller_address()) >= eth_amount, "Insufficient balance"
+            );
             let (token_amount, tax_amount) = self._simulate_buy_for(eth_amount);
             println!("eth_amount: {}", eth_amount);
 
@@ -292,7 +296,7 @@ mod BondingCurve {
                 return self
                     ._handle_launch_trigger(total_amount, token_amount, eth_amount, tax_amount);
             }
-
+            println!("--------- _execute_buy -----------");
             self._execute_buy(eth_amount, tax_amount, token_amount, from);
             println!("--------- buy_for end -----------");
             token_amount
@@ -348,10 +352,10 @@ mod BondingCurve {
         }
 
         fn _launch_pool(ref self: ContractState,) {
-            self.erc20.mint(get_contract_address(), LP_SUPPLY);
+            let this_address = get_contract_address();
+            self.erc20.mint(this_address, LP_SUPPLY);
             let eth_address = ETH.try_into().expect('ETH address is invalid');
             let router_address = ROUTER_ADDRESS.try_into().expect('Router address is invalid');
-            let this_address = get_contract_address();
 
             let eth_contract = IERC20MixinDispatcher { contract_address: eth_address };
             let factory_contract = IFactoryDispatcher {
@@ -363,12 +367,19 @@ mod BondingCurve {
             println!("pair_address");
 
             let market_cap = self.market_cap();
-            eth_contract.approve(router_address, market_cap);
-            self.erc20.approve(router_address, LP_SUPPLY);
+            let bal:u256 = eth_contract.balance_of(this_address);
+            println!("market_cap: {}. Balance {}", market_cap, bal);
+            // assert!(market_cap < bal, "Not possible");
+            eth_contract.approve(router_address, ~0_u256);
+            self.erc20.approve(router_address, ~0_u256);
+            println!(" market_cap: {}, LP_SUPPLY {}", market_cap, LP_SUPPLY);
+            println!("Price_at_0: {}", self.get_price_for_market_cap(0));
+            println!("price: {}", self.get_current_price());
             println!("add_liquidity");
+            
             let (_amount_a, _amount_b, _amount_lp) = router_contract
                 .add_liquidity(
-                    pair_address, market_cap, LP_SUPPLY, 0, 0, self.creator.read(), ~0_64
+                    pair_address, bal, LP_SUPPLY, 1, 1, self.creator.read(), ~0_64
                 );
             println!("transfer tax");
             self._transfer_tax(eth_contract.balance_of(this_address));
@@ -451,12 +462,14 @@ mod BondingCurve {
             let new_cap = current_cap + taxed_amount;
             println!("get_price_for_market_cap");
             let new_price = self.get_price_for_market_cap(new_cap);
+            println!("=> {}", new_price);
             println!("get_current_price");
             let old_price = self.get_current_price();
+            println!("=> {}", old_price);
             let av_price = (old_price + new_price) / 2;
 
             println!("return");
-            (taxed_amount * MANTISSA_1e18 / av_price, tax_amount)
+            (taxed_amount * MANTISSA_1e6 / av_price, tax_amount)
         }
 
         fn _simulate_buy(self: @ContractState, desired_tokens: u256) -> (u256, u256) {
