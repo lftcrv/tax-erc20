@@ -15,8 +15,7 @@ mod BondingCurve {
 
     // Local imports
     use crate::contract::interfaces::{
-        IRouterDispatcher, IRouterDispatcherTrait, IFactoryDispatcher, IFactoryDispatcherTrait,
-        IPairDispatcher, IPairDispatcherTrait
+        IRouterDispatcher, IRouterDispatcherTrait, IFactoryDispatcher, IFactoryDispatcherTrait
     };
     use cubit::f128::types::fixed::{Fixed, FixedTrait, FixedZero};
 
@@ -31,7 +30,6 @@ mod BondingCurve {
     const ETH: felt252 = 0x049d36570d4e46f48e99674bd3fcc84644ddd6b96f7c741b1562b82f9e004dc7;
     const FACTORY_ADDRESS: felt252 =
         0x02a93ef8c7679a5f9b1fcf7286a6e1cadf2e9192be4bcb5cb2d1b39062697527;
-    
     const ROUTER_ADDRESS: felt252 =
         0x049ff5b3a7d38e2b50198f408fa8281635b5bc81ee49ab87ac36c8324c214427;
 
@@ -266,7 +264,7 @@ mod BondingCurve {
             // Check if launch should be triggered
             let total_supply = self.erc20.total_supply();
             let total_amount = token_amount + total_supply;
-            println!("buy total_amount: {}", total_amount);
+            //println!("buy total_amount: {}", total_amount);
 
             if total_amount >= TRIGGER_LAUNCH {
                 return self
@@ -282,26 +280,26 @@ mod BondingCurve {
         #[external(v0)]
         fn buy_for(ref self: ContractState, eth_amount: u256) -> u256 {
             self.require_in_bond_stage(true);
-            println!("--------- buy_for begin -----------");
+            //println!("--------- buy_for begin -----------");
             let eth_contract = IERC20MixinDispatcher { contract_address: ETH.try_into().unwrap() };
             assert!(
                 eth_contract.balance_of(get_caller_address()) >= eth_amount, "Insufficient balance"
             );
             let (token_amount, tax_amount) = self._simulate_buy_for(eth_amount);
-            println!("eth_amount: {}", eth_amount);
+            //println!("eth_amount: {}", eth_amount);
 
             let from: ContractAddress = get_caller_address();
             let total_supply = self.erc20.total_supply();
             let total_amount = token_amount + total_supply;
-            println!("buy total_amount: {}", total_amount);
+            //println!("buy total_amount: {}", total_amount);
 
             if total_amount >= TRIGGER_LAUNCH {
                 return self
                     ._handle_launch_trigger(total_amount, token_amount, eth_amount, tax_amount);
             }
-            println!("--------- _execute_buy -----------");
+            //println!("--------- _execute_buy -----------");
             self._execute_buy(eth_amount, tax_amount, token_amount, from);
-            println!("--------- buy_for end -----------");
+            //println!("--------- buy_for end -----------");
             token_amount
         }
 
@@ -332,18 +330,24 @@ mod BondingCurve {
             eth_amount: u256,
             tax_amount: u256
         ) -> u256 {
-            println!("Launch trigger reached");
+            //println!("Launch trigger reached");
             let diff = total_amount - TRIGGER_LAUNCH;
             if diff > 0 {
+                //println!("diff > 0");
                 let new_amount = total_amount - diff;
+                //println!("new_amount: {}", new_amount);
                 let new_eth_amount = eth_amount * new_amount / amount;
+                //println!("new_eth_amount: {}", new_eth_amount);
                 let adjusted_tax = tax_amount * new_amount / amount;
+                //println!("adjusted_tax: {}", adjusted_tax);
                 self._execute_buy(new_eth_amount, adjusted_tax, new_amount, get_caller_address());
             } else {
+                //println!("diff <= 0");
                 self._execute_buy(eth_amount, tax_amount, amount, get_caller_address());
             }
+            //println!("----------------Launch pool -----------");
             self._launch_pool();
-
+            //println!("----------------Launch triggered -----------");
 
             amount
         }
@@ -375,8 +379,8 @@ mod BondingCurve {
 
         fn _launch_pool(ref self: ContractState,) {
             let this_address = get_contract_address();
-            let this_address_felt: felt252 = this_address.into();
-            println!("this_address: {}", this_address_felt);
+            //let this_address_felt: felt252 = this_address.into();
+            //println!("this_address: {}", this_address_felt);
             self.erc20.mint(this_address, LP_SUPPLY);
             let eth_address = ETH.try_into().expect('ETH address is invalid');
             let router_address = ROUTER_ADDRESS.try_into().expect('Router address is invalid');
@@ -387,21 +391,20 @@ mod BondingCurve {
             let router_contract = IRouterDispatcher { contract_address: router_address };
             let pair_address = factory_contract.create_pair(eth_address, this_address);
 
-            println!("pair_address");
 
             let market_cap = self.market_cap();
-
             eth_contract.approve(router_address, market_cap);
             self.erc20._approve(this_address, router_address, LP_SUPPLY);
-            println!("market: cap {}", market_cap);
-
+            
             let (_amount_a, _amount_b, _amount_lp) = router_contract
-                .add_liquidity(pair_address, market_cap, LP_SUPPLY, market_cap, LP_SUPPLY, this_address, ~0_64);
-            println!("liquidity added");
+                .add_liquidity(pair_address, market_cap, LP_SUPPLY, 0, 0, this_address, ~0_64);
+
+
             let rests = eth_contract.balance_of(this_address);
             if rests > 0 {
                 self._transfer_tax(eth_contract.balance_of(this_address));
             }
+
             self.is_bond_closed.write(true);
         }
 
@@ -459,20 +462,20 @@ mod BondingCurve {
         // Helper functions
         fn _simulate_buy_for(self: @ContractState, eth_amount: u256) -> (u256, u256) {
             let current_cap = self.market_cap();
-            println!("current_cap: {}", current_cap);
+            //println!("current_cap: {}", current_cap);
             let tax_amount = self._simulate_tax(eth_amount, self.buy_tax.read().into());
             let taxed_amount = eth_amount - tax_amount;
 
             let new_cap = current_cap + taxed_amount;
-            println!("get_price_for_market_cap");
+            //println!("get_price_for_market_cap");
             let new_price = self.get_price_for_market_cap(new_cap);
-            println!("=> {}", new_price);
-            println!("get_current_price");
+            //println!("=> {}", new_price);
+            //println!("get_current_price");
             let old_price = self.get_current_price();
-            println!("=> {}", old_price);
+            //println!("=> {}", old_price);
             let av_price = (old_price + new_price) / 2;
 
-            println!("return");
+            //println!("return");
             (taxed_amount * MANTISSA_1e6 / av_price, tax_amount)
         }
 

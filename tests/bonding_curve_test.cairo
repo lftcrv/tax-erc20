@@ -224,32 +224,21 @@ fn setup_contracts() -> (
 fn test_liquidity_pool_launch() {
     let (eth_holder, eth_address, eth, bonding) = setup_contracts();
 
-    // Calculate amount needed to trigger pool launch
-    // let eth_needed = bonding.simulate_buy_for(LP_CAP);
-    // println!("-----eth_needed: {}", eth_needed);
 
-    // Setup approvals
     start_cheat_caller_address(eth_address, eth_holder);
     eth.approve(bonding.contract_address, ~0_u256);
     eth.approve(ROUTER_ADDRESS.try_into().unwrap(), ~0_u256);
     stop_cheat_caller_address(eth_address);
 
-    // Buy enough to trigger launch
-    let bal_before = eth.balance_of(eth_holder);
-    let price_before = bonding.get_current_price();
     cheat_caller_address(bonding.contract_address, eth_holder, CheatSpan::TargetCalls(2));
     bonding.approve(ROUTER_ADDRESS.try_into().unwrap(), ~0_u256);
-    
+
     let tokens_received = bonding.buy_for(TEN_ETH);
     stop_cheat_caller_address(bonding.contract_address);
-    let bal_after = eth.balance_of(eth_holder);
-    let price_after = bonding.get_current_price();
-    println!("bal_before: {} bal_after: {} , diff {} ", bal_before, bal_after, bal_before - bal_after);
-    println!("price_before: {} price_after: {} , diff {} ", price_before, price_after,   price_after - price_before);
 
-    // Verify launch occurred
+
     assert!(tokens_received <= LP_CAP, "Should not exceed LP cap");
-    // Add more post-launch verification as needed
+
 }
 // #[test]
 // #[should_panic(expected: "Insufficient balance")]
