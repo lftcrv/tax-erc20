@@ -31,6 +31,7 @@ mod BondingCurve {
     const ETH: felt252 = 0x049d36570d4e46f48e99674bd3fcc84644ddd6b96f7c741b1562b82f9e004dc7;
     const FACTORY_ADDRESS: felt252 =
         0x02a93ef8c7679a5f9b1fcf7286a6e1cadf2e9192be4bcb5cb2d1b39062697527;
+    
     const ROUTER_ADDRESS: felt252 =
         0x049ff5b3a7d38e2b50198f408fa8281635b5bc81ee49ab87ac36c8324c214427;
 
@@ -323,7 +324,7 @@ mod BondingCurve {
         }
 
 
-        // Helper function to handle launch trigger logic
+        // INTERNAL WRITE
         fn _handle_launch_trigger(
             ref self: ContractState,
             total_amount: u256,
@@ -334,21 +335,15 @@ mod BondingCurve {
             println!("Launch trigger reached");
             let diff = total_amount - TRIGGER_LAUNCH;
             if diff > 0 {
-                println!("diff > 0");
                 let new_amount = total_amount - diff;
-                println!("new_amount: {}", new_amount);
                 let new_eth_amount = eth_amount * new_amount / amount;
-                println!("new_eth_amount: {}", new_eth_amount);
                 let adjusted_tax = tax_amount * new_amount / amount;
-                println!("adjusted_tax: {}", adjusted_tax);
                 self._execute_buy(new_eth_amount, adjusted_tax, new_amount, get_caller_address());
             } else {
-                println!("diff <= 0");
                 self._execute_buy(eth_amount, tax_amount, amount, get_caller_address());
             }
-            println!("----------------Launch pool -----------");
             self._launch_pool();
-            println!("----------------Launch triggered -----------");
+
 
             amount
         }
@@ -366,6 +361,18 @@ mod BondingCurve {
             self.erc20.mint(from, mint_amount);
         }
 
+        fn _increase_market_cap(ref self: ContractState, amount: u256) -> u256 {
+            let new_market_cap = self.controlled_market_cap.read() + amount;
+            self.controlled_market_cap.write(new_market_cap);
+            new_market_cap
+        }
+
+        fn _decrease_market_cap(ref self: ContractState, amount: u256) -> u256 {
+            let new_market_cap = self.controlled_market_cap.read() - amount;
+            self.controlled_market_cap.write(new_market_cap);
+            new_market_cap
+        }
+
         fn _launch_pool(ref self: ContractState,) {
             let this_address = get_contract_address();
             let this_address_felt: felt252 = this_address.into();
@@ -378,24 +385,18 @@ mod BondingCurve {
             let eth_contract = IERC20MixinDispatcher { contract_address: eth_address };
             let factory_contract = IFactoryDispatcher { contract_address: factory_address, };
             let router_contract = IRouterDispatcher { contract_address: router_address };
-
             let pair_address = factory_contract.create_pair(eth_address, this_address);
 
             println!("pair_address");
 
             let market_cap = self.market_cap();
 
-            eth_contract.approve(router_address, ~0_u256);
-            self.erc20._approve(this_address, router_address, ~0_u256);
-            //DEBUG
-            let allowance: u256 = self.erc20.allowance(this_address, router_address);
-            let allowance_eth: u256 = eth_contract.allowance(this_address, router_address);
-            println!("allowance: {}, allowance_eth {}", allowance, allowance_eth);
-            println!("add_liquidity");
-            //
+            eth_contract.approve(router_address, market_cap);
+            self.erc20._approve(this_address, router_address, LP_SUPPLY);
+            println!("market: cap {}", market_cap);
 
             let (_amount_a, _amount_b, _amount_lp) = router_contract
-                .add_liquidity(pair_address, market_cap, LP_SUPPLY, 1, 1, this_address, ~0_64);
+                .add_liquidity(pair_address, market_cap, LP_SUPPLY, market_cap, LP_SUPPLY, this_address, ~0_64);
             println!("liquidity added");
             let rests = eth_contract.balance_of(this_address);
             if rests > 0 {
@@ -403,16 +404,10 @@ mod BondingCurve {
             }
             self.is_bond_closed.write(true);
         }
-        fn require_in_bond_stage(self: @ContractState, is_it: bool) {
-            let is_bond_closed = self.is_bond_closed.read();
-            if !is_it {
-                assert!(is_bond_closed, "Bonding stage is closed");
-            } else {
-                assert!(!is_bond_closed, "Bonding stage is open");
-            }
-        }
 
-        // Internal calculation functions
+
+        /// Internal functions READ
+
         fn _calculate_price(
             self: @ContractState, base: Fixed, market_cap: Fixed, exponent: Fixed
         ) -> u256 {
@@ -451,19 +446,16 @@ mod BondingCurve {
 
             (mantissa_1e9, base_normalized, exponent_normalized)
         }
-
-
-        fn _increase_market_cap(ref self: ContractState, amount: u256) -> u256 {
-            let new_market_cap = self.controlled_market_cap.read() + amount;
-            self.controlled_market_cap.write(new_market_cap);
-            new_market_cap
+        fn require_in_bond_stage(self: @ContractState, is_it: bool) {
+            let is_bond_closed = self.is_bond_closed.read();
+            if !is_it {
+                assert!(is_bond_closed, "Bonding stage is closed");
+            } else {
+                assert!(!is_bond_closed, "Bonding stage is open");
+            }
         }
 
-        fn _decrease_market_cap(ref self: ContractState, amount: u256) -> u256 {
-            let new_market_cap = self.controlled_market_cap.read() - amount;
-            self.controlled_market_cap.write(new_market_cap);
-            new_market_cap
-        }
+
         // Helper functions
         fn _simulate_buy_for(self: @ContractState, eth_amount: u256) -> (u256, u256) {
             let current_cap = self.market_cap();

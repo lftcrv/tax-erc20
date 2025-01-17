@@ -1,7 +1,7 @@
 use starknet::ContractAddress;
 use snforge_std::{
     declare, ContractClassTrait, DeclareResultTrait, start_cheat_caller_address,
-    stop_cheat_caller_address,
+    stop_cheat_caller_address, cheat_caller_address, CheatSpan
 };
 use cubit::f128::types::fixed::{FixedZero};
 
@@ -235,11 +235,17 @@ fn test_liquidity_pool_launch() {
     stop_cheat_caller_address(eth_address);
 
     // Buy enough to trigger launch
-    start_cheat_caller_address(bonding.contract_address, eth_holder);
+    let bal_before = eth.balance_of(eth_holder);
+    let price_before = bonding.get_current_price();
+    cheat_caller_address(bonding.contract_address, eth_holder, CheatSpan::TargetCalls(2));
     bonding.approve(ROUTER_ADDRESS.try_into().unwrap(), ~0_u256);
-
+    
     let tokens_received = bonding.buy_for(TEN_ETH);
     stop_cheat_caller_address(bonding.contract_address);
+    let bal_after = eth.balance_of(eth_holder);
+    let price_after = bonding.get_current_price();
+    println!("bal_before: {} bal_after: {} , diff {} ", bal_before, bal_after, bal_before - bal_after);
+    println!("price_before: {} price_after: {} , diff {} ", price_before, price_after,   price_after - price_before);
 
     // Verify launch occurred
     assert!(tokens_received <= LP_CAP, "Should not exceed LP cap");
