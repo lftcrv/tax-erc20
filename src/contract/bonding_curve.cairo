@@ -9,8 +9,7 @@ mod BondingCurve {
 
     // OpenZeppelin imports
     use openzeppelin_token::erc20::{
-        ERC20Component, ERC20HooksEmptyImpl,
-        interface::{IERC20Mixin, IERC20MixinDispatcher, IERC20MixinDispatcherTrait}
+        ERC20Component, interface::{IERC20Mixin, IERC20MixinDispatcher, IERC20MixinDispatcherTrait}
     };
     use openzeppelin_access::ownable::OwnableComponent;
 
@@ -43,7 +42,6 @@ mod BondingCurve {
     const MAX_SUPPLY: u256 = 1000000000 * MANTISSA_1e6;
     const TRIGGER_LAUNCH: u256 = MAX_SUPPLY * 80 / 100;
     const LP_SUPPLY: u256 = MAX_SUPPLY - TRIGGER_LAUNCH;
-
 
     // Components
     component!(path: ERC20Component, storage: erc20, event: ERC20Event);
@@ -405,9 +403,9 @@ mod BondingCurve {
             }
             self.is_bond_closed.write(true);
         }
-        fn require_in_bond_stage(self: @ContractState, is_it: bool)  {
+        fn require_in_bond_stage(self: @ContractState, is_it: bool) {
             let is_bond_closed = self.is_bond_closed.read();
-            if is_it {
+            if !is_it {
                 assert!(is_bond_closed, "Bonding stage is closed");
             } else {
                 assert!(!is_bond_closed, "Bonding stage is open");
@@ -534,6 +532,28 @@ mod BondingCurve {
             let eth_contract = IERC20MixinDispatcher { contract_address: ETH.try_into().unwrap() };
             eth_contract.transfer(self.protocol.read(), amount);
             amount
+        }
+    }
+
+
+/// Hooks
+    impl ERC20Hooks of ERC20Component::ERC20HooksTrait<ContractState> {
+        fn before_update(
+            ref self: ERC20Component::ComponentState<ContractState>,
+            from: ContractAddress,
+            recipient: ContractAddress,
+            amount: u256
+        ) {
+            assert!(false, "ERC20: transfer is disabled");
+        }
+
+        fn after_update(
+            ref self: ERC20Component::ComponentState<ContractState>,
+            from: ContractAddress,
+            recipient: ContractAddress,
+            amount: u256
+        ) {
+            assert!(false, "ERC20: transfer is disabled");
         }
     }
 }
