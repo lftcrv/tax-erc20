@@ -1,0 +1,1 @@
+{"version":1,"contracts":[{"id":"4lhqhujtc8eia","package_name":"tax_erc20","contract_name":"BondingCurve","module_path":"tax_erc20::contract::bonding_curve::BondingCurve","artifacts":{"sierra":"tax_erc20_unittest_BondingCurve.test.contract_class.json","casm":null}}]}
