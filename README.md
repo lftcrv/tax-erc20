@@ -1,2 +1,9 @@
 # tax-erc20
-Tax erc20 on starknet
+
+Befor deploying via ts :
+
+```
+scarb build
+```
+
+scarb version 2.8.5
