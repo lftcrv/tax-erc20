@@ -22,4 +22,5 @@ Cargo.lock
 
 node_modules/
 Scarb.lock
-
+.env
+target
