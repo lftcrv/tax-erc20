@@ -75,7 +75,6 @@ version = "0.1.0"
 dependencies = [
  "alexandria_math",
  "cubit",
- "openzeppelin_access",
  "openzeppelin_token",
  "snforge_std",
 ]
