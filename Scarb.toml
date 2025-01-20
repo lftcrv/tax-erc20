@@ -7,7 +7,7 @@ edition = "2024_07"
 
 [dependencies]
 starknet = ">=2.8.5"
-# openzeppelin_access = '0.19'
+openzeppelin_introspection = '0.19'
 openzeppelin_token = '0.19'
 alexandria_math = { git = "https://github.com/keep-starknet-strange/alexandria.git" }
 cubit = "1.3.1"

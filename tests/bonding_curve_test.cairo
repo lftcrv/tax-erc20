@@ -30,7 +30,7 @@ const TRIGGER_LAUNCH: u256 = MAX_SUPPLY * 80 / 100; // 80% of max supply
 const BASE_X1E9: felt252 = 5;
 const EXPONENT_X1E9: felt252 = 2555;
 
-const STEP: u32 = 1000; 
+const STEP: u32 = 100;
 #[starknet::interface]
 trait IBondingCurve<TContractState> {
     fn decimals(self: @TContractState) -> u8;
@@ -106,21 +106,53 @@ fn test_price_increases() {
     let (_, _, _, bonding) = setup_contracts();
 
     // Test prices at different supply points
-    let price_0 = bonding.get_price_for_supply(0);
-    let price_1k = bonding.get_price_for_supply(THOUSAND_TOKENS);
-    let price_1m = bonding.get_price_for_supply(MILLION_TOKENS);
+    let base = TRIGGER_LAUNCH / 100;
+    let start_price = bonding.get_current_price();
+    let base_1_perc = bonding.get_price_for_supply(base);
+    let base_10_perc = bonding.get_price_for_supply(base * 10);
+    let base_20_perc = bonding.get_price_for_supply(base * 20);
+    let base_30_perc = bonding.get_price_for_supply(base * 30);
+    let base_40_perc = bonding.get_price_for_supply(base * 40);
+    let base_50_perc = bonding.get_price_for_supply(base * 50);
+    let base_60_perc = bonding.get_price_for_supply(base * 60);
+    let base_70_perc = bonding.get_price_for_supply(base * 70);
+    let base_80_perc = bonding.get_price_for_supply(base * 80);
+    let base_90_perc = bonding.get_price_for_supply(base * 90);
+    let base_buy_x100 = bonding.get_price_for_supply(base * 100);
+    println!(
+        "[\n{},\n{},\n{},\n{},\n{},\n{},\n{},\n{},\n{},\n{},\n{},\n{}\n]",
+        start_price,
+        base_1_perc,
+        base_10_perc,
+        base_20_perc,
+        base_30_perc,
+        base_40_perc,
+        base_50_perc,
+        base_60_perc,
+        base_70_perc,
+        base_80_perc,
+        base_90_perc,
+        base_buy_x100
+    );
 
-    println!("Price at 0 supply: {}", price_0);
-    println!("Price at 1K tokens: {}", price_1k);
-    println!("Price at 1M tokens: {}", price_1m);
-
-    assert!(price_1k > price_0, "Price should increase with supply");
-    assert!(price_1m > price_1k, "Price should increase with supply");
-
-    // Test price acceleration (exponential growth)
-    let diff_1 = price_1k - price_0;
-    let diff_2 = price_1m - price_1k;
-    assert!(diff_2 > diff_1, "Price increase should accelerate");
+    let last_ten_percent_ratio = base_buy_x100 * 100 / base_90_perc;
+    let penultimate_ten_percent_ratio = base_90_perc * 100 / base_80_perc;
+    let ante_penultimate_ten_percent_ratio = base_80_perc * 100 / base_70_perc;
+    let ante_ante_penultimate_ten_percent_ratio = base_70_perc * 100 / base_60_perc;
+    println!(
+        "ratios: {}, {}, {}, {}",
+        last_ten_percent_ratio,
+        penultimate_ten_percent_ratio,
+        ante_penultimate_ten_percent_ratio,
+        ante_ante_penultimate_ten_percent_ratio
+    );
+    assert!(
+        penultimate_ten_percent_ratio > ante_penultimate_ten_percent_ratio,
+        "Price should increase with supply"
+    );
+    assert!(
+        last_ten_percent_ratio > penultimate_ten_percent_ratio, "Price should increase with supply"
+    );
 }
 
 #[test]
@@ -144,45 +176,12 @@ fn test_buy_simulation() {
     assert!(cost_ratio_2 > cost_ratio_1, "Cost increase should accelerate");
 }
 
-#[test]
-fn test_price_simulation() {
-    let (_, _, _, bonding) = setup_contracts();
-
-    // Test buying different amounts
-    let base = TRIGGER_LAUNCH / 100;
-    let start_price = bonding.get_current_price();
-    let base_1_perc = bonding.get_price_for_supply(base);
-    let base_10_perc = bonding.get_price_for_supply(base * 10);
-    let base_20_perc = bonding.get_price_for_supply(base * 20);
-    let base_30_perc = bonding.get_price_for_supply(base * 30);
-    let base_40_perc = bonding.get_price_for_supply(base * 40);
-    let base_50_perc = bonding.get_price_for_supply(base * 50);
-    let base_60_perc = bonding.get_price_for_supply(base * 60);
-    let base_70_perc = bonding.get_price_for_supply(base * 70);
-    let base_80_perc = bonding.get_price_for_supply(base * 80);
-    let base_90_perc = bonding.get_price_for_supply(base * 90);
-    let base_buy_x100 = bonding.get_price_for_supply(base * 100);
-    println!("[\n{},\n{},\n{},\n{},\n{},\n{},\n{},\n{},\n{},\n{},\n{},\n{}\n]",start_price, base_1_perc, base_10_perc, base_20_perc, base_30_perc, base_40_perc, base_50_perc, base_60_perc, base_70_perc, base_80_perc, base_90_perc, base_buy_x100);
-
-    // let base_buy_x10 = bonding.simulate_buy(base * 10);
-    // let base_buy_x100 = bonding.simulate_buy(base * 100);
-    // println!("Base buy: {}", base_buy);
-    // println!("Base buy x10: {}", base_buy_x10);
-    // println!("Base buy x100: {}", base_buy_x100);
-
-    // // Verify exponential price increase
-    // let cost_ratio_1 = base_buy_x10 / base_buy;
-    // let cost_ratio_2 = base_buy_x100 / base_buy_x10;
-    // println!("Cost ratio 1: {}", cost_ratio_1);
-    // println!("Cost ratio 2: {}", cost_ratio_2);
-    // assert!(cost_ratio_2 > cost_ratio_1, "Cost increase should accelerate");
-}
-
 
 #[test]
 #[fork("MAINNET_LATEST")]
 fn test_buy_sell_cycle() {
     let (eth_holder, eth_address, eth, bonding) = setup_contracts();
+    println!("Bonding curve address: ") ;
 
     // Setup approvals
     start_cheat_caller_address(eth_address, eth_holder);
@@ -237,7 +236,7 @@ fn test_launch_trigger() {
 
     // Try to buy more than launch trigger
     let over_trigger = TRIGGER_LAUNCH + 1000000;
-    cheat_caller_address(bonding.contract_address, eth_holder, CheatSpan::TargetCalls(2));
+    cheat_caller_address(bonding.contract_address, eth_holder, CheatSpan::TargetCalls(15));
     println!("Attempting to buy: {} tokens", over_trigger);
     let eth_required = bonding.buy(over_trigger);
     stop_cheat_caller_address(bonding.contract_address);

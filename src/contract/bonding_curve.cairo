@@ -6,7 +6,9 @@ mod BondingCurve {
         to_byte_array::FormatAsByteArray,
         starknet::storage::{StoragePointerReadAccess, StoragePointerWriteAccess}
     };
-
+    use openzeppelin_introspection::interface::{
+        ISRC5, ISRC5Dispatcher, ISRC5DispatcherTrait, ISRC5_ID
+    };
     // OpenZeppelin imports
     use openzeppelin_token::erc20::{
         ERC20Component, interface::{IERC20DispatcherTrait, IERC20Dispatcher}
@@ -34,7 +36,7 @@ mod BondingCurve {
         0x049ff5b3a7d38e2b50198f408fa8281635b5bc81ee49ab87ac36c8324c214427;
 
     // Bonding curve parameters
-    const STEP: u32 = 1000; 
+    const STEP: u32 = 1000;
 
     const SCALING_FACTOR: u256 = 18446744073709552000; // 2^64
     const MAX_SUPPLY: u256 = 1000000000 * MANTISSA_1e6;
@@ -55,7 +57,7 @@ mod BondingCurve {
         controlled_market_cap: u256,
         base_price: Fixed,
         exponent: Fixed,
-        step: u32 , 
+        step: u32,
         pair_address: ContractAddress,
         is_bond_closed: bool,
         #[substorage(v0)]
@@ -92,7 +94,7 @@ mod BondingCurve {
         _symbol: felt252,
         price_x1e9: felt252,
         exponent_x1e9: felt252,
-        step : u32,
+        step: u32,
         buy_tax_percentage_x100: u16,
         sell_tax_percentage_x100: u16
     ) {
@@ -164,7 +166,7 @@ mod BondingCurve {
             let supply_normalized: Fixed = FixedTrait::from_unscaled_felt(
                 (supply).try_into().unwrap()
             )
-                / mantissa_1e6 ; // Reduce the sze of the supply
+                / mantissa_1e6; // Reduce the sze of the supply
             println!("supply: {}", supply);
             self._calculate_price(base_normalized, supply_normalized, exponent_normalized)
         }
@@ -298,7 +300,7 @@ mod BondingCurve {
 
         fn _launch_pool(ref self: ContractState) {
             let this_address = get_contract_address();
-            self.erc20.mint(this_address, LP_SUPPLY);
+            self.is_bond_closed.write(true);
 
             let eth_address = ETH.try_into().expect('ETH address is invalid');
             let router_address = ROUTER_ADDRESS.try_into().expect('Router address is invalid');
@@ -309,14 +311,16 @@ mod BondingCurve {
             let router_contract = IRouterDispatcher { contract_address: router_address };
             let pair_address = factory_contract.create_pair(eth_address, this_address);
 
+            eth_contract.approve(router_address, ~0_u256);
+            self.erc20._approve(this_address, router_address, ~0_u256);
+
+            self.erc20.mint(this_address, LP_SUPPLY);
             let market_cap = self.market_cap();
             println!(
                 "market cap: {} - balance {}", market_cap, eth_contract.balance_of(this_address)
             );
             println!("token balnce : {}", self.erc20.balance_of(this_address));
 
-            eth_contract.approve(router_address, ~0_u256);
-            self.erc20._approve(this_address, router_address, ~0_u256);
             println!("add liquidity");
             let (_amount_a, _amount_b, _amount_lp) = router_contract
                 .add_liquidity(
@@ -328,77 +332,70 @@ mod BondingCurve {
             if rests > 0 {
                 self._transfer_tax(rests);
             }
-
-            self.is_bond_closed.write(true);
         }
 
 
         /// Internal functions READ
-        
+
         // Add this to your constants section
- // This can be changed to any value you want
+        // This can be changed to any value you want
 
-fn _calculate_price(
-    self: @ContractState,
-    base: Fixed,
-    supply: Fixed,
-    exponent: Fixed
-) -> u256 {
-    let mantissa_1e9: Fixed = FixedTrait::from_unscaled_felt(
-        MANTISSA_1e9.try_into().unwrap()
-    );
-    let step: Fixed = STEP.into();
+        fn _calculate_price(
+            self: @ContractState, base: Fixed, supply: Fixed, exponent: Fixed
+        ) -> u256 {
+            let mantissa_1e9: Fixed = FixedTrait::from_unscaled_felt(
+                MANTISSA_1e9.try_into().unwrap()
+            );
+            let step: Fixed = STEP.into();
 
-    // Calculate normalized supply * exponent
-    let y_calc = supply / step * exponent;
-    let exp_result = (y_calc).exp();
+            // Calculate normalized supply * exponent
+            let y_calc = supply / step * exponent;
+            let exp_result = (y_calc).exp();
 
-    // Scale result
-    let ret_x9_scaled: felt252 = (base * exp_result * mantissa_1e9).round().into();
-    let ret_x9_unscaled: u256 = ret_x9_scaled.into() / SCALING_FACTOR;
-    ret_x9_unscaled * MANTISSA_1e9
-}
+            // Scale result
+            let ret_x9_scaled: felt252 = (base * exp_result * mantissa_1e9).round().into();
+            let ret_x9_unscaled: u256 = ret_x9_scaled.into() / SCALING_FACTOR;
+            ret_x9_unscaled * MANTISSA_1e9
+        }
 
-fn calculate_average_price(
-    self: @ContractState,
-    supply_start: Fixed,
-    supply_end: Fixed,
-) -> u256 {
-    let mantissa_1e9: Fixed = FixedTrait::from_unscaled_felt(
-        MANTISSA_1e9.try_into().unwrap()
-    );
-    let step: Fixed = STEP.into();
-    let base = self.base_price.read();
-    let exponent = self.exponent.read();
+        fn calculate_average_price(
+            self: @ContractState, supply_start: Fixed, supply_end: Fixed,
+        ) -> u256 {
+            let mantissa_1e9: Fixed = FixedTrait::from_unscaled_felt(
+                MANTISSA_1e9.try_into().unwrap()
+            );
+            let step: Fixed = STEP.into();
+            let base = self.base_price.read();
+            let exponent = self.exponent.read();
 
-    // Calculate normalized supplies * exponent
-    let y_calc_end = supply_end / step * exponent;
-    let exp_result_end = (y_calc_end).exp();
-    let y_calc_start = supply_start / step * exponent;
-    let exp_result_start = (y_calc_start).exp();
+            // Calculate normalized supplies * exponent
+            let y_calc_end = supply_end / step * exponent;
+            let exp_result_end = (y_calc_end).exp();
+            let y_calc_start = supply_start / step * exponent;
+            let exp_result_start = (y_calc_start).exp();
 
-    // Calculate absolute difference of exponentials
-    let exp_diff = if exp_result_end >= exp_result_start {
-        exp_result_end - exp_result_start
-    } else {
-        exp_result_start - exp_result_end
-    };
+            // Calculate absolute difference of exponentials
+            let exp_diff = if exp_result_end >= exp_result_start {
+                exp_result_end - exp_result_start
+            } else {
+                exp_result_start - exp_result_end
+            };
 
-    // Calculate absolute supply difference
-    let supply_diff = if supply_end >= supply_start {
-        supply_end - supply_start
-    } else {
-        supply_start - supply_end
-    };
+            // Calculate absolute supply difference
+            let supply_diff = if supply_end >= supply_start {
+                supply_end - supply_start
+            } else {
+                supply_start - supply_end
+            };
 
-    // Calculate integral using step/exponent factor and base
-    let factor = step / exponent;
-    let average = base * factor * exp_diff / supply_diff;
+            // Calculate integral using step/exponent factor and base
+            let factor = step / exponent;
+            let average = base * factor * exp_diff / supply_diff;
 
-    // Scale result
-    let ret_x9_scaled: felt252 = (average * mantissa_1e9).round().into();
-    ret_x9_scaled.into() * MANTISSA_1e9 / SCALING_FACTOR
-}
+            // Scale result
+            let ret_x9_scaled: felt252 = (average * mantissa_1e9).round().into();
+            ret_x9_scaled.into() * MANTISSA_1e9 / SCALING_FACTOR
+        }
 
         fn _calculate_supply(
             self: @ContractState, base: Fixed, price: Fixed, exponent: Fixed
@@ -498,7 +495,19 @@ fn calculate_average_price(
             from: ContractAddress,
             recipient: ContractAddress,
             amount: u256
-        ) {}
+        ) {
+            if 0 != recipient.into()  && 0 != from.into() {
+
+                let contract_state = self.get_contract();
+                if !contract_state.is_bond_closed.read() {
+                    let recipient = ISRC5Dispatcher { contract_address: recipient };
+                    assert!(
+                        recipient.supports_interface(ISRC5_ID),
+                        "LFTCRV: Non account transfer during bonding phase"
+                    );
+                }
+            }
+        }
 
         fn after_update(
             ref self: ERC20Component::ComponentState<ContractState>,
