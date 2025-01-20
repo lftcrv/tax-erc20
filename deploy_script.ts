@@ -163,7 +163,7 @@ export async function getPriceForMarketCap(
   marketCap: bigint
 ): Promise<bigint> {
   try {
-    const response = await bond.get_price_for_market_cap(marketCap);
+    const response = await bond.get_price_for_supply(marketCap);
     return BigInt(response);
   } catch (error) {
     console.error("Error getting price for market cap:", error);
