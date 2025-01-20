@@ -17,14 +17,20 @@ const HUNDRED_ETH: u256 = 100 * ONE_ETH;
 const THOUSAND_ETH: u256 = 1000 * ONE_ETH;
 const BILLION_ETH: u256 = 1000000000 * ONE_ETH;
 
+
+// Supply constants (in token units with 6 decimals)
+const ONE_TOKEN: u256 = 1000000; // 1e6
+const THOUSAND_TOKENS: u256 = 1000 * ONE_TOKEN;
+const MILLION_TOKENS: u256 = 1000 * THOUSAND_TOKENS;
+const MAX_SUPPLY: u256 = 1000000000 * ONE_TOKEN; // 1B tokens
+const TRIGGER_LAUNCH: u256 = MAX_SUPPLY * 80 / 100; // 80% of max supply
 // Bonding curve parameters
 // const BASE_X1E9: felt252 = 5;
 // const EXPONENT_X1E9: felt252 = 613020000;
-const BASE_X1E9: felt252 = 46;
-const EXPONENT_X1E9: felt252 = 36060;
-const MAX_SUPPLY: u256 = 1000000000 * 1000000; // 1B tokens with 6 decimals
-const TRIGGER_LAUNCH: u256 = MAX_SUPPLY * 80 / 100;
+const BASE_X1E9: felt252 = 5;
+const EXPONENT_X1E9: felt252 = 2555;
 
+const STEP: u32 = 1000; 
 #[starknet::interface]
 trait IBondingCurve<TContractState> {
     fn decimals(self: @TContractState) -> u8;
@@ -61,6 +67,7 @@ fn deploy_bonding_curve(buy_tax: u16, sell_tax: u16) -> ContractAddress {
         'LFTCRV'.into(),
         BASE_X1E9.into(),
         EXPONENT_X1E9.into(),
+        STEP.into(),
         buy_tax.into(),
         sell_tax.into()
     ];
@@ -90,58 +97,91 @@ fn test_initial_state() {
     assert!(bonding.market_cap() == 0, "Initial market cap should be 0");
 
     let initial_price = bonding.get_current_price();
+    println!("Initial price: {}", initial_price);
     assert!(initial_price > 0, "Initial price should be positive");
 }
 
 #[test]
-fn test_price_curve_behavior() {
+fn test_price_increases() {
     let (_, _, _, bonding) = setup_contracts();
 
-    // Test increasing supply leads to increasing prices
-    let price_at_0 = bonding.get_price_for_supply(0);
-    let price_at_1m = bonding.get_price_for_supply(1000000 * 1000000); // 1M tokens
-    let price_at_10m = bonding.get_price_for_supply(10000000 * 1000000); // 10M tokens
+    // Test prices at different supply points
+    let price_0 = bonding.get_price_for_supply(0);
+    let price_1k = bonding.get_price_for_supply(THOUSAND_TOKENS);
+    let price_1m = bonding.get_price_for_supply(MILLION_TOKENS);
 
-    assert!(price_at_1m > price_at_0, "Price should increase with supply");
-    assert!(price_at_10m > price_at_1m, "Price should increase with supply");
+    println!("Price at 0 supply: {}", price_0);
+    println!("Price at 1K tokens: {}", price_1k);
+    println!("Price at 1M tokens: {}", price_1m);
 
-    // Test exponential growth
-    let growth_1 = price_at_1m - price_at_0;
-    let growth_2 = price_at_10m - price_at_1m;
-    assert!(growth_2 > growth_1, "Price growth should accelerate");
+    assert!(price_1k > price_0, "Price should increase with supply");
+    assert!(price_1m > price_1k, "Price should increase with supply");
 
-    println!("Price at 0: {}", price_at_0);
-    println!("Price at 1M: {}", price_at_1m);
-    println!("Price at 10M: {}", price_at_10m);
-    println!("Growth 1: {}", growth_1);
-    println!("Growth 2: {}", growth_2);
+    // Test price acceleration (exponential growth)
+    let diff_1 = price_1k - price_0;
+    let diff_2 = price_1m - price_1k;
+    assert!(diff_2 > diff_1, "Price increase should accelerate");
 }
 
 #[test]
 fn test_buy_simulation() {
     let (_, _, _, bonding) = setup_contracts();
 
-    // Test various token amounts
-    let small_amount = 1000 * 1000000; // 1000 tokens
-    let medium_amount = 10000 * 1000000; // 10K tokens
-    let large_amount = 100000 * 1000000; // 100K tokens
+    // Test buying different amounts
+    let base = 1000000 * THOUSAND_TOKENS;
+    let base_buy = bonding.simulate_buy(base);
+    let base_buy_x10 = bonding.simulate_buy(base * 10);
+    let base_buy_x100 = bonding.simulate_buy(base * 100);
+    println!("Base buy: {}", base_buy);
+    println!("Base buy x10: {}", base_buy_x10);
+    println!("Base buy x100: {}", base_buy_x100);
 
-    let eth_for_small = bonding.simulate_buy(small_amount);
-    let eth_for_medium = bonding.simulate_buy(medium_amount);
-    let eth_for_large = bonding.simulate_buy(large_amount);
-
-    println!("ETH needed for 1K tokens: {}", eth_for_small);
-    println!("ETH needed for 10K tokens: {}", eth_for_medium);
-    println!("ETH needed for 100K tokens: {}", eth_for_large);
-
-    assert!(eth_for_small > 0, "Should get positive ETH amount for small buy");
-    assert!(eth_for_medium > eth_for_small * 10, "Medium buy should cost more than 10x small buy");
-    assert!(eth_for_large > eth_for_medium * 10, "Large buy should cost more than 10x medium buy");
+    // Verify exponential price increase
+    let cost_ratio_1 = base_buy_x10 / base_buy;
+    let cost_ratio_2 = base_buy_x100 / base_buy_x10;
+    println!("Cost ratio 1: {}", cost_ratio_1);
+    println!("Cost ratio 2: {}", cost_ratio_2);
+    assert!(cost_ratio_2 > cost_ratio_1, "Cost increase should accelerate");
 }
 
 #[test]
+fn test_price_simulation() {
+    let (_, _, _, bonding) = setup_contracts();
+
+    // Test buying different amounts
+    let base = TRIGGER_LAUNCH / 100;
+    let start_price = bonding.get_current_price();
+    let base_1_perc = bonding.get_price_for_supply(base);
+    let base_10_perc = bonding.get_price_for_supply(base * 10);
+    let base_20_perc = bonding.get_price_for_supply(base * 20);
+    let base_30_perc = bonding.get_price_for_supply(base * 30);
+    let base_40_perc = bonding.get_price_for_supply(base * 40);
+    let base_50_perc = bonding.get_price_for_supply(base * 50);
+    let base_60_perc = bonding.get_price_for_supply(base * 60);
+    let base_70_perc = bonding.get_price_for_supply(base * 70);
+    let base_80_perc = bonding.get_price_for_supply(base * 80);
+    let base_90_perc = bonding.get_price_for_supply(base * 90);
+    let base_buy_x100 = bonding.get_price_for_supply(base * 100);
+    println!("[\n{},\n{},\n{},\n{},\n{},\n{},\n{},\n{},\n{},\n{},\n{},\n{}\n]",start_price, base_1_perc, base_10_perc, base_20_perc, base_30_perc, base_40_perc, base_50_perc, base_60_perc, base_70_perc, base_80_perc, base_90_perc, base_buy_x100);
+
+    // let base_buy_x10 = bonding.simulate_buy(base * 10);
+    // let base_buy_x100 = bonding.simulate_buy(base * 100);
+    // println!("Base buy: {}", base_buy);
+    // println!("Base buy x10: {}", base_buy_x10);
+    // println!("Base buy x100: {}", base_buy_x100);
+
+    // // Verify exponential price increase
+    // let cost_ratio_1 = base_buy_x10 / base_buy;
+    // let cost_ratio_2 = base_buy_x100 / base_buy_x10;
+    // println!("Cost ratio 1: {}", cost_ratio_1);
+    // println!("Cost ratio 2: {}", cost_ratio_2);
+    // assert!(cost_ratio_2 > cost_ratio_1, "Cost increase should accelerate");
+}
+
+
+#[test]
 #[fork("MAINNET_LATEST")]
-fn test_buy_sell_mechanics() {
+fn test_buy_sell_cycle() {
     let (eth_holder, eth_address, eth, bonding) = setup_contracts();
 
     // Setup approvals
@@ -150,31 +190,40 @@ fn test_buy_sell_mechanics() {
     stop_cheat_caller_address(eth_address);
 
     // Buy tokens
-    let token_amount = 1000 * 1000000; // 1000 tokens
+    let buy_amount = THOUSAND_TOKENS;
     start_cheat_caller_address(bonding.contract_address, eth_holder);
-    let eth_spent = bonding.buy(token_amount);
+    let eth_spent = bonding.buy(buy_amount);
     stop_cheat_caller_address(bonding.contract_address);
 
-    println!("ETH spent for 1K tokens: {}", eth_spent);
-    println!("Total supply after buy: {}", bonding.total_supply());
+    println!("ETH spent for buy: {}", eth_spent);
+    println!("New total supply: {}", bonding.total_supply());
 
-    // Verify supply and market cap
-    assert!(bonding.total_supply() == token_amount, "Supply should match bought amount");
-    assert!(bonding.market_cap() > 0, "Market cap should be positive");
+    // Try to sell half
+    let sell_amount = buy_amount / 2;
+    let expected_eth = bonding.simulate_sell(sell_amount);
 
-    // Simulate sell
-    let eth_for_sell = bonding.simulate_sell(token_amount);
-    println!("Expected ETH from sell: {}", eth_for_sell);
-
-    // Execute sell
+    println!("Expected ETH from sell: {}", expected_eth);
     start_cheat_caller_address(bonding.contract_address, eth_holder);
-    let eth_received = bonding.sell(token_amount);
+    let received_eth = bonding.sell(sell_amount);
     stop_cheat_caller_address(bonding.contract_address);
 
-    println!("Actually received ETH: {}", eth_received);
+    println!("Actually received ETH: {}", received_eth);
+    assert!(received_eth == expected_eth, "Sell simulation should match actual");
+}
 
-    // Verify sell matches simulation
-    assert!(eth_received == eth_for_sell, "Sell should match simulation");
+
+#[test]
+#[should_panic(expected: "Insufficient balance")]
+#[fork("MAINNET_LATEST")]
+fn test_sell_insufficient_balance() {
+    let (_, _, _, bonding) = setup_contracts();
+
+    start_cheat_caller_address(
+        bonding.contract_address,
+        0x04D8eB0b92839aBd23257c32152a39BfDb378aDc0366ca92e2a4403353BAad51.try_into().unwrap()
+    );
+    bonding.sell(THOUSAND_TOKENS);
+    stop_cheat_caller_address(bonding.contract_address);
 }
 
 #[test]

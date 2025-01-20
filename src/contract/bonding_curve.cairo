@@ -34,6 +34,7 @@ mod BondingCurve {
         0x049ff5b3a7d38e2b50198f408fa8281635b5bc81ee49ab87ac36c8324c214427;
 
     // Bonding curve parameters
+    const STEP: u32 = 1000; 
 
     const SCALING_FACTOR: u256 = 18446744073709552000; // 2^64
     const MAX_SUPPLY: u256 = 1000000000 * MANTISSA_1e6;
@@ -54,6 +55,7 @@ mod BondingCurve {
         controlled_market_cap: u256,
         base_price: Fixed,
         exponent: Fixed,
+        step: u32 , 
         pair_address: ContractAddress,
         is_bond_closed: bool,
         #[substorage(v0)]
@@ -90,6 +92,7 @@ mod BondingCurve {
         _symbol: felt252,
         price_x1e9: felt252,
         exponent_x1e9: felt252,
+        step : u32,
         buy_tax_percentage_x100: u16,
         sell_tax_percentage_x100: u16
     ) {
@@ -104,6 +107,7 @@ mod BondingCurve {
         self.buy_tax.write(buy_tax_percentage_x100);
         self.sell_tax.write(sell_tax_percentage_x100);
         self.creator.write(_owner);
+        self.step.write(step);
         self.protocol.write(_protocol_wallet);
         self.controlled_market_cap.write(0);
         self.is_bond_closed.write(false);
@@ -160,8 +164,8 @@ mod BondingCurve {
             let supply_normalized: Fixed = FixedTrait::from_unscaled_felt(
                 (supply).try_into().unwrap()
             )
-                / mantissa_1e6;
-            println!("supply_normalized ");
+                / mantissa_1e6 ; // Reduce the sze of the supply
+            println!("supply: {}", supply);
             self._calculate_price(base_normalized, supply_normalized, exponent_normalized)
         }
 
@@ -306,7 +310,9 @@ mod BondingCurve {
             let pair_address = factory_contract.create_pair(eth_address, this_address);
 
             let market_cap = self.market_cap();
-            println!("market cap: {} - balance {}", market_cap, eth_contract.balance_of(this_address));
+            println!(
+                "market cap: {} - balance {}", market_cap, eth_contract.balance_of(this_address)
+            );
             println!("token balnce : {}", self.erc20.balance_of(this_address));
 
             eth_contract.approve(router_address, ~0_u256);
@@ -328,24 +334,71 @@ mod BondingCurve {
 
 
         /// Internal functions READ
+        
+        // Add this to your constants section
+ // This can be changed to any value you want
 
-        fn _calculate_price(
-            self: @ContractState, base: Fixed, supply: Fixed, exponent: Fixed
-        ) -> u256 {
-            let mantissa_1e9: Fixed = FixedTrait::from_unscaled_felt(
-                MANTISSA_1e9.try_into().unwrap()
-            );
-            println!("supply");
+fn _calculate_price(
+    self: @ContractState,
+    base: Fixed,
+    supply: Fixed,
+    exponent: Fixed
+) -> u256 {
+    let mantissa_1e9: Fixed = FixedTrait::from_unscaled_felt(
+        MANTISSA_1e9.try_into().unwrap()
+    );
+    let step: Fixed = STEP.into();
 
-            let y_calc = supply / 1000000_u32.into() * exponent;
+    // Calculate normalized supply * exponent
+    let y_calc = supply / step * exponent;
+    let exp_result = (y_calc).exp();
 
-            let exp_result = (y_calc).exp();
-            let ret_x9_scaled: felt252 = (base * exp_result * mantissa_1e9).round().into();
-            let ret_x9_unscaled: u256 = ret_x9_scaled.into()  / SCALING_FACTOR;
-            let ret = ret_x9_unscaled * MANTISSA_1e9;
-            println!("price: {}", ret);
-            ret
-        }
+    // Scale result
+    let ret_x9_scaled: felt252 = (base * exp_result * mantissa_1e9).round().into();
+    let ret_x9_unscaled: u256 = ret_x9_scaled.into() / SCALING_FACTOR;
+    ret_x9_unscaled * MANTISSA_1e9
+}
+
+fn calculate_average_price(
+    self: @ContractState,
+    supply_start: Fixed,
+    supply_end: Fixed,
+) -> u256 {
+    let mantissa_1e9: Fixed = FixedTrait::from_unscaled_felt(
+        MANTISSA_1e9.try_into().unwrap()
+    );
+    let step: Fixed = STEP.into();
+    let base = self.base_price.read();
+    let exponent = self.exponent.read();
+
+    // Calculate normalized supplies * exponent
+    let y_calc_end = supply_end / step * exponent;
+    let exp_result_end = (y_calc_end).exp();
+    let y_calc_start = supply_start / step * exponent;
+    let exp_result_start = (y_calc_start).exp();
+
+    // Calculate absolute difference of exponentials
+    let exp_diff = if exp_result_end >= exp_result_start {
+        exp_result_end - exp_result_start
+    } else {
+        exp_result_start - exp_result_end
+    };
+
+    // Calculate absolute supply difference
+    let supply_diff = if supply_end >= supply_start {
+        supply_end - supply_start
+    } else {
+        supply_start - supply_end
+    };
+
+    // Calculate integral using step/exponent factor and base
+    let factor = step / exponent;
+    let average = base * factor * exp_diff / supply_diff;
+
+    // Scale result
+    let ret_x9_scaled: felt252 = (average * mantissa_1e9).round().into();
+    ret_x9_scaled.into() * MANTISSA_1e9 / SCALING_FACTOR
+}
 
         fn _calculate_supply(
             self: @ContractState, base: Fixed, price: Fixed, exponent: Fixed
@@ -379,27 +432,29 @@ mod BondingCurve {
             }
         }
 
+
         fn _simulate_sell(self: @ContractState, token_amount: u256) -> (u256, u256) {
-            let current_supply = self.erc20.total_supply();
-            if token_amount > current_supply {
+            let current_supply = self._normalize_token(self.erc20.total_supply());
+            let normalized_token_amount = self._normalize_token(token_amount);
+            if current_supply < normalized_token_amount {
                 return (0, 0);
             };
-            let new_supply = current_supply - token_amount;
-            let av_price = (self.get_current_price() + self.get_price_for_supply(new_supply)) / 2;
-            let eth_amount = token_amount * av_price / MANTISSA_1e6;
+
+            let new_supply = current_supply - normalized_token_amount;
+            let av_price = self.calculate_average_price(current_supply, new_supply);
+
+            let eth_amount = token_amount
+                * av_price
+                / MANTISSA_1e6; //Here the mantissa_1e6 because token decimals  6 but price and ether is 18
             self._simulate_sell_tax(eth_amount)
         }
 
         fn _simulate_buy(self: @ContractState, desired_tokens: u256) -> (u256, u256) {
-            let current_supply = self.erc20.total_supply();
-            let new_supply = current_supply + desired_tokens;
+            let current_supply = self._normalize_token(self.erc20.total_supply());
+            let normalized_desired_tokens = self._normalize_token(desired_tokens);
 
-            let old_price = self.get_current_price();
-            println!("old price: {}", old_price);
-            let new_price = self.get_price_for_supply(new_supply);
-            println!("new price: {}", new_price);
-
-            let av_price = (old_price + new_price) / 2;
+            let new_supply = current_supply + normalized_desired_tokens;
+            let av_price = self.calculate_average_price(current_supply, new_supply);
 
             let eth_needed = desired_tokens
                 * av_price
@@ -419,6 +474,20 @@ mod BondingCurve {
             let eth_contract = IERC20Dispatcher { contract_address: ETH.try_into().unwrap() };
             eth_contract.transfer(self.protocol.read(), amount);
             amount
+        }
+
+        fn _normalize_token(self: @ContractState, token_amount: u256) -> Fixed {
+            let mantissa_1e6: Fixed = FixedTrait::from_unscaled_felt(
+                MANTISSA_1e6.try_into().unwrap()
+            );
+            FixedTrait::from_unscaled_felt(token_amount.try_into().unwrap()) / mantissa_1e6
+        }
+        fn _normalize_ether(self: @ContractState, wei_amount: u256) -> Fixed {
+            let mantissa_1e9: Fixed = FixedTrait::from_unscaled_felt(
+                MANTISSA_1e9.try_into().unwrap()
+            );
+            let gwei_amount = (wei_amount / MANTISSA_1e9).try_into().unwrap();
+            FixedTrait::from_unscaled_felt(gwei_amount) / mantissa_1e9
         }
     }
 
