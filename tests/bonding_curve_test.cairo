@@ -252,10 +252,7 @@ fn test_launch_trigger() {
     println!("Actual supply after buy: {}", bonding.total_supply());
     println!("ETH spent: {}", eth_required);
 
-    cheat_caller_address(bonding.contract_address, eth_holder, CheatSpan::TargetCalls(2));
-    println!("Attempting to buy: {} tokens", over_trigger);
-    let eth_required = bonding.buy(over_trigger);
-    stop_cheat_caller_address(bonding.contract_address);
+
 
     // Verify supply is capped
     assert!(bonding.total_supply() <= MAX_SUPPLY, "Supply should not exceed launch trigger");

@@ -357,7 +357,7 @@ mod BondingCurve {
             ret_x9_unscaled * MANTISSA_1e9
         }
 
-        fn calculate_average_price(
+        fn _calculate_average_price(
             self: @ContractState, supply_start: Fixed, supply_end: Fixed,
         ) -> u256 {
             let mantissa_1e9: Fixed = FixedTrait::from_unscaled_felt(
@@ -437,7 +437,7 @@ mod BondingCurve {
             };
 
             let new_supply = current_supply - normalized_token_amount;
-            let av_price = self.calculate_average_price(current_supply, new_supply);
+            let av_price = self._calculate_average_price(current_supply, new_supply);
 
             let eth_amount = token_amount
                 * av_price
@@ -450,7 +450,7 @@ mod BondingCurve {
             let normalized_desired_tokens = self._normalize_token(desired_tokens);
 
             let new_supply = current_supply + normalized_desired_tokens;
-            let av_price = self.calculate_average_price(current_supply, new_supply);
+            let av_price = self._calculate_average_price(current_supply, new_supply);
 
             let eth_needed = desired_tokens
                 * av_price
