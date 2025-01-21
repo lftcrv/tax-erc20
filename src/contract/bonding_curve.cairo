@@ -13,7 +13,6 @@ mod BondingCurve {
     use openzeppelin_token::erc20::{
         ERC20Component, interface::{IERC20DispatcherTrait, IERC20Dispatcher}
     };
-    // use openzeppelin_access::ownable::OwnableComponent;
 
     // Local imports
     use crate::contract::interfaces::{
@@ -45,7 +44,6 @@ mod BondingCurve {
 
     // Components
     component!(path: ERC20Component, storage: erc20, event: ERC20Event);
-    // component!(path: OwnableComponent, storage: ownable, event: OwnableEvent);
 
     // Storage
     #[storage]
@@ -90,22 +88,20 @@ mod BondingCurve {
         ref self: ContractState,
         _protocol_wallet: ContractAddress,
         _owner: ContractAddress,
-        _name: felt252,
-        _symbol: felt252,
+        _name: ByteArray,
+        _symbol: ByteArray,
         price_x1e9: felt252,
         exponent_x1e9: felt252,
         step: u32,
         buy_tax_percentage_x100: u16,
         sell_tax_percentage_x100: u16
     ) {
-        let (_name, _symbol) = (_name.format_as_byte_array(10), _symbol.format_as_byte_array(10));
         let mantissa: u64 = MANTISSA_1e9.try_into().unwrap();
         let base_price_ = FixedTrait::from_unscaled_felt(price_x1e9) / mantissa.into();
         let exponent_ = FixedTrait::from_unscaled_felt(exponent_x1e9) / mantissa.into();
         self.base_price.write(base_price_);
         self.exponent.write(exponent_);
         self.erc20.initializer(_name, _symbol);
-        // self.ownable.initializer(_owner);
         self.buy_tax.write(buy_tax_percentage_x100);
         self.sell_tax.write(sell_tax_percentage_x100);
         self.creator.write(_owner);

@@ -1,6 +1,14 @@
-import { RpcProvider, Account, Contract, json, CallData } from "starknet";
+import {
+  RpcProvider,
+  Account,
+  Contract,
+  json,
+  CallData,
+  ByteArray,
+} from "starknet";
 import fs from "fs";
 import * as dotenv from "dotenv";
+import { byteArray } from "starknet";
 dotenv.config();
 // RPC endpoints
 const RPC_URLS = {
@@ -21,7 +29,7 @@ type ConstructorArgs = {
   _symbol: string;
   price_x1e9: number;
   exponent_x1e9: number;
-  base: number;
+  step: number;
   buy_tax_percentage_x100: number;
   sell_tax_percentage_x100: number;
 };
@@ -78,7 +86,7 @@ async function deployBondingCurve(
     const deployResponse = await account.declareAndDeploy({
       contract: contractJson,
       casm: csmJson,
-      // constructorCalldata: constructorCalldata,
+      constructorCalldata: constructorCalldata,
     });
     console.log("deployResponse");
 
@@ -116,6 +124,7 @@ async function main() {
     _symbol: "LFTCRV",
     price_x1e9: 5,
     exponent_x1e9: 613020000,
+    step: 1e6,
     buy_tax_percentage_x100: 500,
     sell_tax_percentage_x100: 1000,
   });
