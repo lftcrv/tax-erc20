@@ -11,7 +11,6 @@ const PROTOCOL: felt252 = 0x04D8eB0b92839aBd23257c32152a39BfDb378aDc0366ca92e2a4
 const ROUTER_ADDRESS: felt252 = 0x049ff5b3a7d38e2b50198f408fa8281635b5bc81ee49ab87ac36c8324c214427;
 
 
-
 const RANDOM_POOL: felt252 = 0x068400056dccee818caa7e8a2c305f9a60d255145bac22d6c5c9bf9e2e046b71;
 // Token amounts
 const ONE_ETH: u256 = 1000000000000000000;
@@ -157,10 +156,8 @@ fn test_price_increases() {
         ante_ante_penultimate_ten_percent_ratio
     );
     assert!(
-        last_ten_percent_ratio > penultimate_ten_percent_ratio,
-        "Price should increase with supply"
+        last_ten_percent_ratio > penultimate_ten_percent_ratio, "Price should increase with supply"
     );
-
 }
 
 #[test]
@@ -189,7 +186,7 @@ fn test_buy_simulation() {
 #[fork("MAINNET_LATEST")]
 fn test_buy_sell_cycle() {
     let (eth_holder, eth_address, eth, bonding) = setup_contracts();
-    println!("Bonding curve address: ") ;
+    println!("Bonding curve address: ");
 
     // Setup approvals
     start_cheat_caller_address(eth_address, eth_holder);
@@ -241,7 +238,7 @@ fn test_launch_trigger() {
     start_cheat_caller_address(eth_address, eth_holder);
     eth.approve(bonding.contract_address, ~0_u256);
     stop_cheat_caller_address(eth_address);
-    
+
     // Try to buy more than launch trigger
     let over_trigger = TRIGGER_LAUNCH + 1000000;
     println!("Attempting to buy: {} tokens", over_trigger);
@@ -267,17 +264,15 @@ fn test_launch_trigger_multiple() {
     start_cheat_caller_address(eth_address, eth_holder);
     eth.approve(bonding.contract_address, ~0_u256);
     stop_cheat_caller_address(eth_address);
-    
+
     // Try to buy more than launch trigger
     let mut over_trigger = TRIGGER_LAUNCH;
     let mut total_eth: u256 = 0;
-    
 
     loop {
-
         cheat_caller_address(bonding.contract_address, eth_holder, CheatSpan::TargetCalls(1));
-        let eth_required = bonding.buy(TRIGGER_LAUNCH/10);
-        over_trigger -= TRIGGER_LAUNCH/10;
+        let eth_required = bonding.buy(TRIGGER_LAUNCH / 10);
+        over_trigger -= TRIGGER_LAUNCH / 10;
         stop_cheat_caller_address(eth_holder);
         total_eth += eth_required;
         if over_trigger <= 0 {
@@ -297,15 +292,13 @@ fn test_transfer_pre_launch() {
     start_cheat_caller_address(eth_address, eth_holder);
     eth.approve(bonding.contract_address, ~0_u256);
     stop_cheat_caller_address(eth_address);
-    
-    
+
     start_cheat_caller_address(bonding.contract_address, eth_holder);
     let eth_required = bonding.buy(THOUSAND_TOKENS);
     stop_cheat_caller_address(bonding.contract_address);
-    
-    
+
     start_cheat_caller_address(bonding.contract_address, eth_holder);
-    bonding.transfer(RANDOM_POOL.try_into().unwrap(),THOUSAND_TOKENS);
+    bonding.transfer(RANDOM_POOL.try_into().unwrap(), THOUSAND_TOKENS);
     stop_cheat_caller_address(bonding.contract_address);
 }
 
@@ -322,5 +315,4 @@ fn test_sell_without_balance() {
     bonding.sell(1000000); // Try to sell 1 token
     stop_cheat_caller_address(bonding.contract_address);
 }
-
 

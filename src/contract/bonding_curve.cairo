@@ -1,13 +1,10 @@
 #[starknet::contract]
 mod BondingCurve {
     // Imports grouped by functionality
+    use starknet::event::EventEmitter;
     use starknet::{ContractAddress, get_caller_address, get_contract_address};
-    use core::{
-        starknet::storage::{StoragePointerReadAccess, StoragePointerWriteAccess}
-    };
-    use openzeppelin_introspection::interface::{
-        ISRC5Dispatcher, ISRC5DispatcherTrait, ISRC5_ID
-    };
+    use core::{starknet::storage::{StoragePointerReadAccess, StoragePointerWriteAccess}};
+    use openzeppelin_introspection::interface::{ISRC5Dispatcher, ISRC5DispatcherTrait, ISRC5_ID};
     // OpenZeppelin imports
     use openzeppelin_token::erc20::{
         ERC20Component, interface::{IERC20DispatcherTrait, IERC20Dispatcher}
@@ -28,10 +25,9 @@ mod BondingCurve {
 
     // Constants
     const ETH: felt252 = 0x049d36570d4e46f48e99674bd3fcc84644ddd6b96f7c741b1562b82f9e004dc7;
-    const FACTORY_ADDRESS: felt252 =
-        0x02a93ef8c7679a5f9b1fcf7286a6e1cadf2e9192be4bcb5cb2d1b39062697527;
-    const ROUTER_ADDRESS: felt252 = 0x041fd22b238fa21cfcf5dd45a8548974d8263b3a531a60388411c5e230f97023;
-        //0x049ff5b3a7d38e2b50198f408fa8281635b5bc81ee49ab87ac36c8324c214427;
+
+    const ROUTER_ADDRESS: felt252 =
+        0x041fd22b238fa21cfcf5dd45a8548974d8263b3a531a60388411c5e230f97023;
 
     // Bonding curve parameters
 
@@ -42,7 +38,6 @@ mod BondingCurve {
 
     // Components
     component!(path: ERC20Component, storage: erc20, event: ERC20Event);
-
 
 
     #[derive(Drop, PartialEq, starknet::Event)]
@@ -57,6 +52,7 @@ mod BondingCurve {
         #[key]
         pub amount_token: u256,
         pub amount_eth: u256,
+        pub amount_lp: u256,
         pub pair_address: ContractAddress,
         pub creator: ContractAddress,
     }
@@ -77,7 +73,6 @@ mod BondingCurve {
         is_bond_closed: bool,
         #[substorage(v0)]
         erc20: ERC20Component::Storage,
-
     }
 
     // Events
@@ -89,7 +84,6 @@ mod BondingCurve {
         Buy: BuyOrSell,
         Sell: BuyOrSell,
         PoolLaunched: PoolLaunched,
-
     }
 
     // Implementation blocks
@@ -239,9 +233,18 @@ mod BondingCurve {
 
             let (eth_amount, tax_amount) = self._simulate_buy(token_amount);
             self._execute_buy(eth_amount, tax_amount, token_amount, get_caller_address());
+            self
+                .emit(
+                    Event::Buy(
+                        BuyOrSell {
+                            from: get_caller_address(), amount: token_amount, value: eth_amount
+                        }
+                    )
+                );
             if is_cap_reached {
                 self._launch_pool();
             }
+
             eth_amount
         }
 
@@ -263,6 +266,14 @@ mod BondingCurve {
             self._transfer_tax(tax);
             eth_contract.transfer(get_caller_address(), amount);
             self._decrease_market_cap(amount);
+            self
+                .emit(
+                    Event::Sell(
+                        BuyOrSell {
+                            from: get_caller_address(), amount: token_amount, value: amount
+                        }
+                    )
+                );
             amount
         }
 
@@ -311,7 +322,8 @@ mod BondingCurve {
 
             let eth_address = ETH.try_into().expect('ETH address is invalid');
             let router_address = ROUTER_ADDRESS.try_into().expect('Router address is invalid');
-            // let factory_address = FACTORY_ADDRESS.try_into().expect('Factory address is invalid');
+            // let factory_address = FACTORY_ADDRESS.try_into().expect('Factory address is
+            // invalid');
 
             let eth_contract = IERC20Dispatcher { contract_address: eth_address };
             // let factory_contract = IFactoryDispatcher { contract_address: factory_address, };
@@ -320,10 +332,38 @@ mod BondingCurve {
 
             eth_contract.approve(router_address, ~0_u256);
             self.erc20._approve(this_address, router_address, ~0_u256);
-            let (_amount_a, _amount_b, _amount_lp) = router_contract
+
+            let (amount_a, amount_b, amount_lp) = router_contract
                 .add_liquidity(
-                    eth_address,  this_address, self.market_cap(), LP_SUPPLY, 0, 0, self.protocol.read(), ~0_64
+                    eth_address,
+                    this_address,
+                    self.market_cap(),
+                    LP_SUPPLY,
+                    0,
+                    0,
+                    self.protocol.read(),
+                    18446744073709552000
                 );
+            let factory_address = IFactoryDispatcher {
+                contract_address: router_contract.factory()
+            };
+
+            let pair_address = factory_address.get_pair(eth_address, this_address);
+            self.pair_address.write(pair_address);
+
+            self
+                .emit(
+                    Event::PoolLaunched(
+                        PoolLaunched {
+                            amount_token: amount_b,
+                            amount_eth: amount_a,
+                            amount_lp: amount_lp,
+                            pair_address,
+                            creator: self.creator.read()
+                        }
+                    )
+                );
+            println!("pair_address: {:?}", pair_address);
             let rests = eth_contract.balance_of(this_address);
             if rests > 0 {
                 self._transfer_tax(rests);
@@ -492,8 +532,7 @@ mod BondingCurve {
             recipient: ContractAddress,
             amount: u256
         ) {
-            if 0 != recipient.into()  && 0 != from.into() {
-
+            if 0 != recipient.into() && 0 != from.into() {
                 let contract_state = self.get_contract();
                 if !contract_state.is_bond_closed.read() {
                     let recipient = ISRC5Dispatcher { contract_address: recipient };

@@ -40,6 +40,9 @@ pub trait IPair<TContractState> {
 #[starknet::interface]
 pub trait IFactory<TContractState> {
     fn all_pairs(self: @TContractState) -> Array<ContractAddress>;
+    fn get_pair(
+        self: @TContractState, token0: ContractAddress, token1: ContractAddress
+    ) -> ContractAddress;
     fn num_of_pairs(self: @TContractState) -> u32;
     fn fee_to(self: @TContractState) -> ContractAddress;
     fn fee_to_setter(self: @TContractState) -> ContractAddress;
@@ -65,64 +68,89 @@ pub trait IFactory<TContractState> {
     fn migrate_pairs(ref self: TContractState, pairs: Array<ContractAddress>);
 }
 
+
 #[starknet::interface]
 pub trait IRouter<TContractState> {
+    // Setup functions
+    fn initializer(
+        ref self: TContractState, factory: ContractAddress, proxy_admin: ContractAddress
+    );
+    fn factory(self: @TContractState) -> ContractAddress;
+
+    // View functions
+    fn sort_tokens(
+        self: @TContractState, token_a: ContractAddress, token_b: ContractAddress
+    ) -> (ContractAddress, ContractAddress);
+
     fn quote(self: @TContractState, amount_a: u256, reserve_a: u256, reserve_b: u256) -> u256;
 
+    fn get_amount_out(
+        self: @TContractState, amount_in: u256, reserve_in: u256, reserve_out: u256
+    ) -> u256;
+
+    fn get_amount_in(
+        self: @TContractState, amount_out: u256, reserve_in: u256, reserve_out: u256
+    ) -> u256;
+
     fn get_amounts_out(
-        self: @TContractState,
-        amount_in: u256,
-        token_in: ContractAddress,
-        pairs: Span<ContractAddress>,
-    ) -> (Array<u256>, ContractAddress);
+        self: @TContractState, amount_in: u256, path: Array<ContractAddress>
+    ) -> Array<u256>;
 
     fn get_amounts_in(
-        self: @TContractState,
-        amount_out: u256,
-        token_out: ContractAddress,
-        pairs: Span<ContractAddress>,
-    ) -> (Array<u256>, ContractAddress);
+        self: @TContractState, amount_out: u256, path: Array<ContractAddress>
+    ) -> Array<u256>;
 
+    // State-changing functions
     fn add_liquidity(
         ref self: TContractState,
-        token_0: ContractAddress,
-        token_1: ContractAddress,
-        amount_0_desired: u256,
-        amount_1_desired: u256,
-        amount_0_min: u256,
-        amount_1_min: u256,
+        token_a: ContractAddress,
+        token_b: ContractAddress,
+        amount_a_desired: u256,
+        amount_b_desired: u256,
+        amount_a_min: u256,
+        amount_b_min: u256,
         to: ContractAddress,
-        deadline: u64,
+        deadline: felt252
     ) -> (u256, u256, u256);
 
     fn remove_liquidity(
         ref self: TContractState,
-        pair: ContractAddress,
+        token_a: ContractAddress,
+        token_b: ContractAddress,
         liquidity: u256,
-        amount_0_min: u256,
-        amount_1_min: u256,
+        amount_a_min: u256,
+        amount_b_min: u256,
         to: ContractAddress,
-        deadline: u64,
+        deadline: felt252
     ) -> (u256, u256);
-
 
     fn swap_exact_tokens_for_tokens(
         ref self: TContractState,
         amount_in: u256,
         amount_out_min: u256,
-        token_in: ContractAddress,
-        pairs: Span<ContractAddress>,
+        path: Array<ContractAddress>,
         to: ContractAddress,
-        deadline: u64,
+        deadline: felt252
     ) -> Array<u256>;
 
     fn swap_tokens_for_exact_tokens(
         ref self: TContractState,
         amount_out: u256,
         amount_in_max: u256,
-        token_out: ContractAddress,
-        pairs: Span<ContractAddress>,
+        path: Array<ContractAddress>,
         to: ContractAddress,
-        deadline: u64,
+        deadline: felt252
     ) -> Array<u256>;
+}
+
+// Events
+#[derive(Drop, starknet::Event)]
+pub struct Upgraded {
+    pub implementation: ContractAddress,
+}
+
+#[derive(Drop, starknet::Event)]
+pub struct AdminChanged {
+    pub previous_admin: ContractAddress,
+    pub new_admin: ContractAddress,
 }
