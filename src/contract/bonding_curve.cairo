@@ -152,6 +152,11 @@ mod BondingCurve {
         }
 
         #[external(v0)]
+        fn get_pair(self: @ContractState) -> ContractAddress {
+            self.pair_address.read()
+        }
+
+        #[external(v0)]
         fn buy_tax_percentage_x100(self: @ContractState) -> u16 {
             self.buy_tax.read()
         }

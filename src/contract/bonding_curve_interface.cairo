@@ -16,13 +16,16 @@ pub trait IBondingCurve<TContractState> {
     fn simulate_buy(self: @TContractState, token_amount: u256) -> u256;
     fn simulate_sell(self: @TContractState, token_amount: u256) -> u256;
     fn get_taxes(self: @TContractState) -> (u16, u16);
+    fn get_pair(self: @TContractState) -> ContractAddress;
 
     // ERC20 standard functions
     fn total_supply(self: @TContractState) -> u256;
     fn balance_of(self: @TContractState, account: ContractAddress) -> u256;
     fn allowance(self: @TContractState, owner: ContractAddress, spender: ContractAddress) -> u256;
     fn transfer(ref self: TContractState, recipient: ContractAddress, amount: u256) -> bool;
-    fn transfer_from(ref self: TContractState, sender: ContractAddress, recipient: ContractAddress, amount: u256) -> bool;
+    fn transfer_from(
+        ref self: TContractState, sender: ContractAddress, recipient: ContractAddress, amount: u256
+    ) -> bool;
     fn approve(ref self: TContractState, spender: ContractAddress, amount: u256) -> bool;
 
     // External functions

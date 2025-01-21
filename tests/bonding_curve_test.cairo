@@ -10,7 +10,7 @@ const ETH_HOLDER: felt252 = 0x0213c67ed78bc280887234fe5ed5e77272465317978ae86c25
 const PROTOCOL: felt252 = 0x04D8eB0b92839aBd23257c32152a39BfDb378aDc0366ca92e2a4403353BAad51;
 const ROUTER_ADDRESS: felt252 = 0x049ff5b3a7d38e2b50198f408fa8281635b5bc81ee49ab87ac36c8324c214427;
 
-
+const EMPTY_WALLET_PROTOCOL: felt252 = 123456789;
 const RANDOM_POOL: felt252 = 0x068400056dccee818caa7e8a2c305f9a60d255145bac22d6c5c9bf9e2e046b71;
 // Token amounts
 const ONE_ETH: u256 = 1000000000000000000;
@@ -49,13 +49,16 @@ pub trait IBondingCurve<TContractState> {
     fn simulate_buy(self: @TContractState, token_amount: u256) -> u256;
     fn simulate_sell(self: @TContractState, token_amount: u256) -> u256;
     fn get_taxes(self: @TContractState) -> (u16, u16);
+    fn get_pair(self: @TContractState) -> ContractAddress;
 
     // ERC20 standard functions
     fn total_supply(self: @TContractState) -> u256;
     fn balance_of(self: @TContractState, account: ContractAddress) -> u256;
     fn allowance(self: @TContractState, owner: ContractAddress, spender: ContractAddress) -> u256;
     fn transfer(ref self: TContractState, recipient: ContractAddress, amount: u256) -> bool;
-    fn transfer_from(ref self: TContractState, sender: ContractAddress, recipient: ContractAddress, amount: u256) -> bool;
+    fn transfer_from(
+        ref self: TContractState, sender: ContractAddress, recipient: ContractAddress, amount: u256
+    ) -> bool;
     fn approve(ref self: TContractState, spender: ContractAddress, amount: u256) -> bool;
 
     // External functions
@@ -68,6 +71,7 @@ trait IERC20<TContractState> {
     fn approve(ref self: TContractState, spender: ContractAddress, amount: u256);
     fn decimals(self: @TContractState) -> u8;
     fn balance_of(self: @TContractState, owner: ContractAddress) -> u256;
+    fn balanceOf(self: @TContractState, owner: ContractAddress) -> u256;
     fn transfer(ref self: TContractState, recipient: ContractAddress, amount: u256);
     fn transfer_from(
         ref self: TContractState, sender: ContractAddress, recipient: ContractAddress, amount: u256
@@ -78,8 +82,8 @@ fn deploy_bonding_curve(buy_tax: u16, sell_tax: u16) -> ContractAddress {
     let contract = declare("BondingCurve").expect('Declaration failed').contract_class();
 
     let calldata: Array<felt252> = array![
+        EMPTY_WALLET_PROTOCOL,
         PROTOCOL.into(),
-        ETH_HOLDER.into(),
         1.into(),
         'LFTCRV'.into(),
         1.into(),
@@ -267,6 +271,10 @@ fn test_launch_trigger() {
     println!("Actual supply after buy: {}", bonding.total_supply());
     println!("test_launch_triggerETH spent: {}", eth_required);
     // Verify supply is capped
+    let creator = bonding.creator();
+    let pair_contract = IERC20Dispatcher { contract_address: bonding.get_pair() };
+    assert!(pair_contract.balanceOf(EMPTY_WALLET_PROTOCOL.try_into().unwrap()) > 0, "Creator should  have  LP tokens");
+
     assert!(bonding.total_supply() <= MAX_SUPPLY, "Supply should not exceed launch trigger");
 }
 
@@ -301,7 +309,6 @@ fn test_launch_trigger_multiple() {
 #[test]
 #[should_panic]
 #[fork("MAINNET_LATEST")]
-
 fn test_transfer_pre_launch_on_pool() {
     let (eth_holder, eth_address, eth, bonding) = setup_contracts();
 
@@ -331,7 +338,11 @@ fn test_transfer_pre_launch_on_account() {
     stop_cheat_caller_address(bonding.contract_address);
 
     start_cheat_caller_address(bonding.contract_address, eth_holder);
-    bonding.transfer(0x023b155662678EaFcB602D1CcB8D933430FFE885E82A60681c1d0B73bcd6F80E.try_into().unwrap(), THOUSAND_TOKENS);
+    bonding
+        .transfer(
+            0x023b155662678EaFcB602D1CcB8D933430FFE885E82A60681c1d0B73bcd6F80E.try_into().unwrap(),
+            THOUSAND_TOKENS
+        );
     stop_cheat_caller_address(bonding.contract_address);
 }
 
