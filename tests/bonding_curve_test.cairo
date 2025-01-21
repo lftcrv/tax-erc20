@@ -157,7 +157,7 @@ fn test_price_increases() {
         ante_ante_penultimate_ten_percent_ratio
     );
     assert!(
-        penultimate_ten_percent_ratio > ante_penultimate_ten_percent_ratio,
+        last_ten_percent_ratio > penultimate_ten_percent_ratio,
         "Price should increase with supply"
     );
 
