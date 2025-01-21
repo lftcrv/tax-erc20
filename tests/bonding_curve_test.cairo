@@ -10,6 +10,9 @@ const ETH_HOLDER: felt252 = 0x0213c67ed78bc280887234fe5ed5e77272465317978ae86c25
 const PROTOCOL: felt252 = 0x04D8eB0b92839aBd23257c32152a39BfDb378aDc0366ca92e2a4403353BAad51;
 const ROUTER_ADDRESS: felt252 = 0x049ff5b3a7d38e2b50198f408fa8281635b5bc81ee49ab87ac36c8324c214427;
 
+
+
+const RANDOM_POOL: felt252 = 0x068400056dccee818caa7e8a2c305f9a60d255145bac22d6c5c9bf9e2e046b71;
 // Token amounts
 const ONE_ETH: u256 = 1000000000000000000;
 const TEN_ETH: u256 = 10 * ONE_ETH;
@@ -42,6 +45,7 @@ trait IBondingCurve<TContractState> {
     fn buy(ref self: TContractState, token_amount: u256) -> u256;
     fn sell(ref self: TContractState, token_amount: u256) -> u256;
     fn get_taxes(self: @TContractState) -> (u16, u16);
+    fn transfer(ref self: TContractState, recipient: ContractAddress, amount: u256);
     fn approve(ref self: TContractState, spender: ContractAddress, amount: u256);
     fn total_supply(self: @TContractState) -> u256;
 }
@@ -228,7 +232,6 @@ fn test_sell_insufficient_balance() {
     bonding.sell(THOUSAND_TOKENS);
     stop_cheat_caller_address(bonding.contract_address);
 }
-
 #[test]
 #[fork("MAINNET_LATEST")]
 fn test_launch_trigger() {
@@ -240,7 +243,7 @@ fn test_launch_trigger() {
 
     // Try to buy more than launch trigger
     let over_trigger = TRIGGER_LAUNCH + 1000000;
-    cheat_caller_address(bonding.contract_address, eth_holder, CheatSpan::TargetCalls(15));
+    cheat_caller_address(bonding.contract_address, eth_holder, CheatSpan::TargetCalls(2));
     println!("Attempting to buy: {} tokens", over_trigger);
     let eth_required = bonding.buy(over_trigger);
     stop_cheat_caller_address(bonding.contract_address);
@@ -249,8 +252,34 @@ fn test_launch_trigger() {
     println!("Actual supply after buy: {}", bonding.total_supply());
     println!("ETH spent: {}", eth_required);
 
+    cheat_caller_address(bonding.contract_address, eth_holder, CheatSpan::TargetCalls(2));
+    println!("Attempting to buy: {} tokens", over_trigger);
+    let eth_required = bonding.buy(over_trigger);
+    stop_cheat_caller_address(bonding.contract_address);
+
     // Verify supply is capped
     assert!(bonding.total_supply() <= MAX_SUPPLY, "Supply should not exceed launch trigger");
+}
+
+#[test]
+#[should_panic]
+#[fork("MAINNET_LATEST")]
+fn test_transfer_pre_launch() {
+    let (eth_holder, eth_address, eth, bonding) = setup_contracts();
+
+    start_cheat_caller_address(eth_address, eth_holder);
+    eth.approve(bonding.contract_address, ~0_u256);
+    stop_cheat_caller_address(eth_address);
+    
+    
+    start_cheat_caller_address(bonding.contract_address, eth_holder);
+    let eth_required = bonding.buy(THOUSAND_TOKENS);
+    stop_cheat_caller_address(bonding.contract_address);
+    
+    
+    start_cheat_caller_address(bonding.contract_address, eth_holder);
+    bonding.transfer(RANDOM_POOL.try_into().unwrap(),THOUSAND_TOKENS);
+    stop_cheat_caller_address(bonding.contract_address);
 }
 
 #[test]
@@ -266,3 +295,5 @@ fn test_sell_without_balance() {
     bonding.sell(1000000); // Try to sell 1 token
     stop_cheat_caller_address(bonding.contract_address);
 }
+
+

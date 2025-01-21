@@ -424,7 +424,7 @@ mod BondingCurve {
             if !is_it {
                 assert!(is_bond_closed, "Bonding stage is closed");
             } else {
-                assert!(!is_bond_closed, "Bonding stage is open");
+                assert!(!is_bond_closed, "Bonding stage is still open");
             }
         }
 
