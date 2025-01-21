@@ -3,11 +3,10 @@ mod BondingCurve {
     // Imports grouped by functionality
     use starknet::{ContractAddress, get_caller_address, get_contract_address};
     use core::{
-        to_byte_array::FormatAsByteArray,
         starknet::storage::{StoragePointerReadAccess, StoragePointerWriteAccess}
     };
     use openzeppelin_introspection::interface::{
-        ISRC5, ISRC5Dispatcher, ISRC5DispatcherTrait, ISRC5_ID
+        ISRC5Dispatcher, ISRC5DispatcherTrait, ISRC5_ID
     };
     // OpenZeppelin imports
     use openzeppelin_token::erc20::{
@@ -139,6 +138,10 @@ mod BondingCurve {
         fn name(self: @ContractState) -> ByteArray {
             self.erc20.ERC20_name.read()
         }
+        #[external(v0)]
+        fn creator(self: @ContractState) -> ContractAddress {
+            self.creator.read()
+        }
 
         #[external(v0)]
         fn symbol(self: @ContractState) -> ByteArray {
@@ -183,7 +186,6 @@ mod BondingCurve {
                 (supply).try_into().unwrap()
             )
                 / mantissa_1e6; // Reduce the sze of the supply
-            println!("supply: {}", supply);
             self._calculate_price(base_normalized, supply_normalized, exponent_normalized)
         }
 
@@ -236,20 +238,9 @@ mod BondingCurve {
                 token_amount
             };
 
-            println!("simulating buy");
-            let eth_contract = IERC20Dispatcher { contract_address: ETH.try_into().unwrap() };
             let (eth_amount, tax_amount) = self._simulate_buy(token_amount);
-            println!("eth_amount: {}", eth_amount);
-            assert!(
-                eth_contract.balance_of(get_caller_address()) >= eth_amount,
-                "BondingCurve: Insufficient balance"
-            );
-
-            // Handle regular buy
-            println!("executing buy");
             self._execute_buy(eth_amount, tax_amount, token_amount, get_caller_address());
             if is_cap_reached {
-                println!("launching pool");
                 self._launch_pool();
             }
             eth_amount
@@ -327,23 +318,15 @@ mod BondingCurve {
             let router_contract = IRouterDispatcher { contract_address: router_address };
             let pair_address = factory_contract.create_pair(eth_address, this_address);
 
+            self.erc20.mint(this_address, LP_SUPPLY);
             eth_contract.approve(router_address, ~0_u256);
             self.erc20._approve(this_address, router_address, ~0_u256);
 
-            self.erc20.mint(this_address, LP_SUPPLY);
             let market_cap = self.market_cap();
-            println!(
-                "market cap: {} - balance {}", market_cap, eth_contract.balance_of(this_address)
-            );
-            println!("token balnce : {}", self.erc20.balance_of(this_address));
-
-            println!("add liquidity");
             let (_amount_a, _amount_b, _amount_lp) = router_contract
                 .add_liquidity(
-                    pair_address, market_cap, LP_SUPPLY, 0, 0, self.creator.read(), ~0_64
+                    pair_address, market_cap, LP_SUPPLY, 0, 0, self.protocol.read(), ~0_64
                 );
-
-            println!("checking rest");
             let rests = eth_contract.balance_of(this_address);
             if rests > 0 {
                 self._transfer_tax(rests);
