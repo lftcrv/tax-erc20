@@ -363,7 +363,6 @@ mod BondingCurve {
                         }
                     )
                 );
-            println!("pair_address: {:?}", pair_address);
             let rests = eth_contract.balance_of(this_address);
             if rests > 0 {
                 self._transfer_tax(rests);
