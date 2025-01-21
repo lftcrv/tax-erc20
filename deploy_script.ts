@@ -13,7 +13,7 @@ dotenv.config();
 // RPC endpoints
 const RPC_URLS = {
   MAINNET: "https://starknet-mainnet.public.blastapi.io/rpc/v0_7",
-  DEVNET: "http://127.0.0.1:5050/rpc",
+  DEVNET: "https://starknet-sepolia.public.blastapi.io",
 } as const;
 
 interface TransactionResponse {

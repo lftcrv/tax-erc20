@@ -34,7 +34,6 @@ mod BondingCurve {
         //0x049ff5b3a7d38e2b50198f408fa8281635b5bc81ee49ab87ac36c8324c214427;
 
     // Bonding curve parameters
-    const STEP: u32 = 1000;
 
     const SCALING_FACTOR: u256 = 18446744073709552000; // 2^64
     const MAX_SUPPLY: u256 = 1000000000 * MANTISSA_1e6;
@@ -343,7 +342,7 @@ mod BondingCurve {
             let mantissa_1e9: Fixed = FixedTrait::from_unscaled_felt(
                 MANTISSA_1e9.try_into().unwrap()
             );
-            let step: Fixed = STEP.into();
+            let step: Fixed = self.step.read().into();
 
             // Calculate normalized supply * exponent
             let y_calc = supply / step * exponent;
@@ -361,7 +360,7 @@ mod BondingCurve {
             let mantissa_1e9: Fixed = FixedTrait::from_unscaled_felt(
                 MANTISSA_1e9.try_into().unwrap()
             );
-            let step: Fixed = STEP.into();
+            let step: Fixed = self.step.read().into();
             let base = self.base_price.read();
             let exponent = self.exponent.read();
 
