@@ -21,6 +21,7 @@ type ConstructorArgs = {
   _symbol: string;
   price_x1e9: number;
   exponent_x1e9: number;
+  base: number;
   buy_tax_percentage_x100: number;
   sell_tax_percentage_x100: number;
 };
@@ -207,19 +208,6 @@ export async function simulateBuy(
   }
 }
 
-export async function simulateBuyFor(
-  bond: Contract,
-  tokenAmount: bigint
-): Promise<bigint> {
-  try {
-    const response = await bond.simulate_buy_for(tokenAmount);
-    return BigInt(response);
-  } catch (error) {
-    console.error("Error simulating buy for:", error);
-    throw error;
-  }
-}
-
 export async function simulateSell(
   bond: Contract,
   tokenAmount: bigint
@@ -236,31 +224,15 @@ export async function simulateSell(
 export async function buy(
   bond: Contract,
   provider: RpcProvider,
-  ethAmount: bigint
+  tokenAmount: bigint
 ): Promise<TransactionResponse> {
   try {
-    const response = await bond.buy(ethAmount);
+    const response = await bond.buy(tokenAmount);
     console.log("Buy transaction submitted:", response);
     await provider.waitForTransaction(response.transaction_hash);
     return response;
   } catch (error) {
     console.error("Error buying tokens:", error);
-    throw error;
-  }
-}
-
-export async function buyFor(
-  bond: Contract,
-  provider: RpcProvider,
-  ethAmount: bigint
-): Promise<TransactionResponse> {
-  try {
-    const response = await bond.buy_for(ethAmount);
-    console.log("Buy For transaction submitted:", response);
-    await provider.waitForTransaction(response.transaction_hash);
-    return response;
-  } catch (error) {
-    console.error("Error buying tokens for amount:", error);
     throw error;
   }
 }
