@@ -300,7 +300,9 @@ fn test_launch_trigger_multiple() {
 
 #[test]
 #[should_panic]
-fn test_transfer_pre_launch() {
+#[fork("MAINNET_LATEST")]
+
+fn test_transfer_pre_launch_on_pool() {
     let (eth_holder, eth_address, eth, bonding) = setup_contracts();
 
     start_cheat_caller_address(eth_address, eth_holder);
@@ -313,6 +315,23 @@ fn test_transfer_pre_launch() {
 
     start_cheat_caller_address(bonding.contract_address, eth_holder);
     bonding.transfer(RANDOM_POOL.try_into().unwrap(), THOUSAND_TOKENS);
+    stop_cheat_caller_address(bonding.contract_address);
+}
+#[test]
+#[fork("MAINNET_LATEST")]
+fn test_transfer_pre_launch_on_account() {
+    let (eth_holder, eth_address, eth, bonding) = setup_contracts();
+
+    start_cheat_caller_address(eth_address, eth_holder);
+    eth.approve(bonding.contract_address, ~0_u256);
+    stop_cheat_caller_address(eth_address);
+
+    start_cheat_caller_address(bonding.contract_address, eth_holder);
+    let eth_required = bonding.buy(THOUSAND_TOKENS);
+    stop_cheat_caller_address(bonding.contract_address);
+
+    start_cheat_caller_address(bonding.contract_address, eth_holder);
+    bonding.transfer(0x023b155662678EaFcB602D1CcB8D933430FFE885E82A60681c1d0B73bcd6F80E.try_into().unwrap(), THOUSAND_TOKENS);
     stop_cheat_caller_address(bonding.contract_address);
 }
 
