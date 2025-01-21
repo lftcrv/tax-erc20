@@ -30,8 +30,8 @@ mod BondingCurve {
     const ETH: felt252 = 0x049d36570d4e46f48e99674bd3fcc84644ddd6b96f7c741b1562b82f9e004dc7;
     const FACTORY_ADDRESS: felt252 =
         0x02a93ef8c7679a5f9b1fcf7286a6e1cadf2e9192be4bcb5cb2d1b39062697527;
-    const ROUTER_ADDRESS: felt252 =
-        0x049ff5b3a7d38e2b50198f408fa8281635b5bc81ee49ab87ac36c8324c214427;
+    const ROUTER_ADDRESS: felt252 = 0x041fd22b238fa21cfcf5dd45a8548974d8263b3a531a60388411c5e230f97023;
+        //0x049ff5b3a7d38e2b50198f408fa8281635b5bc81ee49ab87ac36c8324c214427;
 
     // Bonding curve parameters
     const STEP: u32 = 1000;
@@ -307,25 +307,23 @@ mod BondingCurve {
 
         fn _launch_pool(ref self: ContractState) {
             let this_address = get_contract_address();
+            self.erc20.mint(this_address, LP_SUPPLY);
             self.is_bond_closed.write(true);
 
             let eth_address = ETH.try_into().expect('ETH address is invalid');
             let router_address = ROUTER_ADDRESS.try_into().expect('Router address is invalid');
-            let factory_address = FACTORY_ADDRESS.try_into().expect('Factory address is invalid');
+            // let factory_address = FACTORY_ADDRESS.try_into().expect('Factory address is invalid');
 
             let eth_contract = IERC20Dispatcher { contract_address: eth_address };
-            let factory_contract = IFactoryDispatcher { contract_address: factory_address, };
+            // let factory_contract = IFactoryDispatcher { contract_address: factory_address, };
             let router_contract = IRouterDispatcher { contract_address: router_address };
-            let pair_address = factory_contract.create_pair(eth_address, this_address);
+            // let pair_address = factory_contract.create_pair(eth_address, this_address);
 
-            self.erc20.mint(this_address, LP_SUPPLY);
             eth_contract.approve(router_address, ~0_u256);
             self.erc20._approve(this_address, router_address, ~0_u256);
-
-            let market_cap = self.market_cap();
             let (_amount_a, _amount_b, _amount_lp) = router_contract
                 .add_liquidity(
-                    pair_address, market_cap, LP_SUPPLY, 0, 0, self.protocol.read(), ~0_64
+                    eth_address,  this_address, self.market_cap(), LP_SUPPLY, 0, 0, self.protocol.read(), ~0_64
                 );
             let rests = eth_contract.balance_of(this_address);
             if rests > 0 {

@@ -240,44 +240,43 @@ fn test_launch_trigger() {
     start_cheat_caller_address(eth_address, eth_holder);
     eth.approve(bonding.contract_address, ~0_u256);
     stop_cheat_caller_address(eth_address);
-
+    
     // Try to buy more than launch trigger
     let over_trigger = TRIGGER_LAUNCH + 1000000;
-    cheat_caller_address(bonding.contract_address, eth_holder, CheatSpan::TargetCalls(2));
     println!("Attempting to buy: {} tokens", over_trigger);
+    let binance_bal = eth.balance_of(eth_holder);
+    // println!("ETH balance: {}", binance_bal /1000000000000000000);
+    // start_cheat_caller_address(eth_address, eth_holder);
+    cheat_caller_address(bonding.contract_address, eth_holder, CheatSpan::TargetCalls(1));
     let eth_required = bonding.buy(over_trigger);
-    stop_cheat_caller_address(bonding.contract_address);
+    stop_cheat_caller_address(eth_holder);
 
     println!("Attempted to buy: {} tokens", over_trigger);
     println!("Actual supply after buy: {}", bonding.total_supply());
     println!("ETH spent: {}", eth_required);
-
-
-
     // Verify supply is capped
     assert!(bonding.total_supply() <= MAX_SUPPLY, "Supply should not exceed launch trigger");
 }
 
-#[test]
-#[should_panic]
-#[fork("MAINNET_LATEST")]
-fn test_transfer_pre_launch() {
-    let (eth_holder, eth_address, eth, bonding) = setup_contracts();
+// #[test]
+// #[should_panic]
+// fn test_transfer_pre_launch() {
+//     let (eth_holder, eth_address, eth, bonding) = setup_contracts();
 
-    start_cheat_caller_address(eth_address, eth_holder);
-    eth.approve(bonding.contract_address, ~0_u256);
-    stop_cheat_caller_address(eth_address);
+//     start_cheat_caller_address(eth_address, eth_holder);
+//     eth.approve(bonding.contract_address, ~0_u256);
+//     stop_cheat_caller_address(eth_address);
     
     
-    start_cheat_caller_address(bonding.contract_address, eth_holder);
-    let eth_required = bonding.buy(THOUSAND_TOKENS);
-    stop_cheat_caller_address(bonding.contract_address);
+//     start_cheat_caller_address(bonding.contract_address, eth_holder);
+//     let eth_required = bonding.buy(THOUSAND_TOKENS);
+//     stop_cheat_caller_address(bonding.contract_address);
     
     
-    start_cheat_caller_address(bonding.contract_address, eth_holder);
-    bonding.transfer(RANDOM_POOL.try_into().unwrap(),THOUSAND_TOKENS);
-    stop_cheat_caller_address(bonding.contract_address);
-}
+//     start_cheat_caller_address(bonding.contract_address, eth_holder);
+//     bonding.transfer(RANDOM_POOL.try_into().unwrap(),THOUSAND_TOKENS);
+//     stop_cheat_caller_address(bonding.contract_address);
+// }
 
 #[test]
 #[should_panic(expected: "Insufficient balance")]

@@ -85,7 +85,8 @@ pub trait IRouter<TContractState> {
 
     fn add_liquidity(
         ref self: TContractState,
-        pair: ContractAddress,
+        token_0: ContractAddress,
+        token_1: ContractAddress,
         amount_0_desired: u256,
         amount_1_desired: u256,
         amount_0_min: u256,
