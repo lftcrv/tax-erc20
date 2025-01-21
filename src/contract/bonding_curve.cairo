@@ -45,6 +45,25 @@ mod BondingCurve {
     // Components
     component!(path: ERC20Component, storage: erc20, event: ERC20Event);
 
+
+
+    #[derive(Drop, PartialEq, starknet::Event)]
+    pub struct BuyOrSell {
+        #[key]
+        pub from: ContractAddress,
+        pub amount: u256,
+        pub value: u256
+    }
+    #[derive(Drop, PartialEq, starknet::Event)]
+    pub struct PoolLaunched {
+        #[key]
+        pub amount_token: u256,
+        pub amount_eth: u256,
+        pub pair_address: ContractAddress,
+        pub creator: ContractAddress,
+    }
+
+
     // Storage
     #[storage]
     struct Storage {
@@ -60,8 +79,7 @@ mod BondingCurve {
         is_bond_closed: bool,
         #[substorage(v0)]
         erc20: ERC20Component::Storage,
-        // #[substorage(v0)]
-    // ownable: OwnableComponent::Storage,
+
     }
 
     // Events
@@ -70,8 +88,10 @@ mod BondingCurve {
     enum Event {
         #[flat]
         ERC20Event: ERC20Component::Event,
-        // #[flat]
-    // OwnableEvent: OwnableComponent::Event,
+        Buy: BuyOrSell,
+        Sell: BuyOrSell,
+        PoolLaunched: PoolLaunched,
+
     }
 
     // Implementation blocks
