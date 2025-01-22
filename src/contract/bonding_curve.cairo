@@ -112,6 +112,8 @@ mod BondingCurve {
         let mantissa: u64 = MANTISSA_1e9.try_into().unwrap();
         let base_price_ = FixedTrait::from_unscaled_felt(price_x1e9) / mantissa.into();
         let exponent_ = FixedTrait::from_unscaled_felt(exponent_x1e9) / mantissa.into();
+        assert!(buy_tax_percentage_x100 < 1000, "BondingCurve: Buy tax too high");
+        assert!(sell_tax_percentage_x100 < 1000, "BondingCurve: Sell tax too high");
         self.base_price.write(base_price_);
         self.exponent.write(exponent_);
         self.erc20.initializer(_name, _symbol);
@@ -258,7 +260,6 @@ mod BondingCurve {
             let (amount_eth_to_send, tax) = self._simulate_sell(token_amount);
             assert!(self.market_cap() >= amount_eth_to_send + tax, "BondingCurve: Insufficient market cap");
             self._execute_sell(amount_eth_to_send, tax, token_amount, get_caller_address());
-            
             amount_eth_to_send
         }
 
