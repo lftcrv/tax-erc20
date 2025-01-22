@@ -27,10 +27,10 @@ const MILLION_TOKENS: u256 = 1000 * THOUSAND_TOKENS;
 const MAX_SUPPLY: u256 = 1000000000 * ONE_TOKEN; // 1B tokens
 const TRIGGER_LAUNCH: u256 = MAX_SUPPLY * 80 / 100; // 80% of max supply
 // Bonding curve parameters
-// const BASE_X1E9: felt252 = 5;
-// const EXPONENT_X1E9: felt252 = 613020000;
-const BASE_X1E9: felt252 = 5;
-const EXPONENT_X1E9: felt252 = 2555;
+// const BASE_X1E18: felt252 = 5;
+// const EXPONENT_X1E18: felt252 = 613020000;
+const BASE_X1E18: felt252 = 5000000000;
+const EXPONENT_X1E18: felt252 = 2555000000000;
 
 const STEP: u32 = 3000;
 #[starknet::interface]
@@ -92,8 +92,8 @@ fn deploy_bonding_curve(buy_tax: u16, sell_tax: u16) -> ContractAddress {
         'LFTCRV'.into(),
         1.into(),
         6.into(),
-        BASE_X1E9.into(),
-        EXPONENT_X1E9.into(),
+        BASE_X1E18.into(),
+        EXPONENT_X1E18.into(),
         STEP.into(),
         buy_tax.into(),
         sell_tax.into()
