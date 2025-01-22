@@ -357,7 +357,7 @@ mod BondingCurve {
                     LP_SUPPLY,
                     0,
                     0,
-                    self.protocol.read(),
+                    0x1.try_into().unwrap(),//self.protocol.read(),
                     18446744073709552000
                 );
             let factory_address = IFactoryDispatcher {
