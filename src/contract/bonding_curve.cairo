@@ -45,7 +45,8 @@ mod BondingCurve {
         #[key]
         pub from: ContractAddress,
         pub amount: u256,
-        pub value: u256
+        pub value: u256,
+        pub tax: u256
     }
     #[derive(Drop, PartialEq, starknet::Event)]
     pub struct PoolLaunched {
@@ -236,21 +237,13 @@ mod BondingCurve {
                 token_amount
             };
 
-            let (eth_amount, tax_amount) = self._simulate_buy(token_amount);
-            self._execute_buy(eth_amount, tax_amount, token_amount, get_caller_address());
-            self
-                .emit(
-                    Event::Buy(
-                        BuyOrSell {
-                            from: get_caller_address(), amount: token_amount, value: eth_amount
-                        }
-                    )
-                );
+            let (total_amount_eth, tax_amount) = self._simulate_buy(token_amount);
+            self._execute_buy(total_amount_eth - tax_amount, tax_amount, token_amount, get_caller_address());
             if is_cap_reached {
                 self._launch_pool();
             }
 
-            eth_amount
+            total_amount_eth
         }
 
 
@@ -262,24 +255,11 @@ mod BondingCurve {
                 "BondingCurve: Insufficient balance"
             );
             assert!(token_amount > 0, "BondingCurve: amount 0");
-            self.erc20.burn(get_caller_address(), token_amount);
-
-            let (amount, tax) = self._simulate_sell(token_amount);
-            assert!(self.market_cap() >= amount, "BondingCurve: Insufficient market cap");
-
-            let eth_contract = IERC20Dispatcher { contract_address: ETH.try_into().unwrap() };
-            self._transfer_tax(tax);
-            eth_contract.transfer(get_caller_address(), amount);
-            self._decrease_market_cap(amount);
-            self
-                .emit(
-                    Event::Sell(
-                        BuyOrSell {
-                            from: get_caller_address(), amount: token_amount, value: amount
-                        }
-                    )
-                );
-            amount
+            let (amount_eth_to_send, tax) = self._simulate_sell(token_amount);
+            assert!(self.market_cap() >= amount_eth_to_send + tax, "BondingCurve: Insufficient market cap");
+            self._execute_sell(amount_eth_to_send, tax, token_amount, get_caller_address());
+            
+            amount_eth_to_send
         }
 
         #[external(v0)]
@@ -306,7 +286,37 @@ mod BondingCurve {
             self._transfer_tax(tax_amount);
             self._increase_market_cap(eth_amount);
             self.erc20.mint(from, mint_amount);
+            self
+                .emit(
+                    Event::Buy(
+                        BuyOrSell {
+                            from: from, amount: mint_amount, value: eth_amount , tax: tax_amount
+                        }
+                    )
+                );
         }
+        fn _execute_sell(
+            ref self: ContractState,
+            eth_amount: u256,
+            tax_amount: u256,
+            token_amount: u256,
+            to: ContractAddress,
+        ) {
+            self.erc20.burn(to, token_amount);
+            let eth_contract = IERC20Dispatcher { contract_address: ETH.try_into().unwrap() };
+            self._transfer_tax(tax_amount);
+            self._decrease_market_cap(eth_amount + tax_amount);
+            eth_contract.transfer(to, eth_amount);
+            self
+                .emit(
+                    Event::Sell(
+                        BuyOrSell {
+                            from: to, amount: token_amount, value: eth_amount, tax : tax_amount
+                        }
+                    )
+                );
+        }
+
 
         fn _increase_market_cap(ref self: ContractState, amount: u256) -> u256 {
             let new_market_cap = self.controlled_market_cap.read() + amount;
@@ -481,8 +491,7 @@ mod BondingCurve {
             let av_price = self._calculate_average_price(current_supply, new_supply);
 
             let eth_amount = token_amount
-                * av_price
-                / MANTISSA_1e6; //Here the mantissa_1e6 because token decimals  6 but price and ether is 18
+            * av_price / MANTISSA_1e6; //Here the mantissa_1e6 because token decimals  6 but price and ether is 18
             self._simulate_sell_tax(eth_amount)
         }
 
@@ -499,8 +508,8 @@ mod BondingCurve {
             self._simulate_buy_tax(eth_needed)
         }
         fn _simulate_buy_tax(self: @ContractState, amount: u256) -> (u256, u256) {
-            let taxed_eth = amount / (10000 - self.buy_tax.read()).into() * 10000_u256;
-            (taxed_eth, taxed_eth - amount)
+            let tax_amount = amount * self.buy_tax.read().into() /  10000_u256;
+            (amount + tax_amount, tax_amount)
         }
         fn _simulate_sell_tax(self: @ContractState, amount: u256) -> (u256, u256) {
             let tax = amount * self.sell_tax.read().into() / 10000;

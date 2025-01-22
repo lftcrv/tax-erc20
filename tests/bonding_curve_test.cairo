@@ -266,6 +266,11 @@ fn test_launch_trigger() {
     cheat_caller_address(bonding.contract_address, eth_holder, CheatSpan::TargetCalls(1));
     let eth_required = bonding.buy(over_trigger);
     stop_cheat_caller_address(eth_holder);
+let tax_protocol: ContractAddress =EMPTY_WALLET_PROTOCOL.try_into().unwrap();   
+    let taxes =  eth.balance_of(tax_protocol);
+    let expected_taxes = eth_required - (eth_required / 105 * 100 );
+    println!("expected taxes: {} -> real_taxe {}", expected_taxes, taxes);
+    assert!(taxes == expected_taxes, "Taxes should be 5% of ETH spent");
 
     println!("Attempted to buy: {} tokens", over_trigger);
     println!("Actual supply after buy: {}", bonding.total_supply());
