@@ -216,6 +216,12 @@ mod BondingCurve {
         }
 
         #[external(v0)]
+        fn supply_advancement_ratio_x100(self: @ContractState) -> u256 {
+            self.total_supply() * 10_000 / TRIGGER_LAUNCH
+        }
+
+
+        #[external(v0)]
         fn buy(ref self: ContractState, token_amount: u256) -> u256 {
             self.require_in_bond_stage(true);
 
