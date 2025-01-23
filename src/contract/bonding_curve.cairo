@@ -93,9 +93,7 @@ mod BondingCurve {
     #[abi(embed_v0)]
     impl ERC20CamelOnlyImpl = ERC20Component::ERC20CamelOnlyImpl<ContractState>;
     impl ERC20InternalImpl = ERC20Component::InternalImpl<ContractState>;
-    // impl OwnableInternalImpl = OwnableComponent::InternalImpl<ContractState>;
 
-    // impl OwnableMixinImpl = OwnableComponent::OwnableMixinImpl<ContractState>;
     #[constructor]
     fn constructor(
         ref self: ContractState,
@@ -205,12 +203,6 @@ mod BondingCurve {
             let (ret, _) = self._simulate_buy(token_amount);
             ret
         }
-
-        // #[external(v0)]
-        // fn simulate_buy_for(self: @ContractState, eth_amount: u256) -> u256 {
-        //     let (ret, _) = self._simulate_buy_for(eth_amount);
-        //     ret
-        // }
 
         #[external(v0)]
         fn simulate_sell(self: @ContractState, token_amount: u256) -> u256 {

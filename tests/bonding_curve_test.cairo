@@ -27,8 +27,7 @@ const MILLION_TOKENS: u256 = 1000 * THOUSAND_TOKENS;
 const MAX_SUPPLY: u256 = 1000000000 * ONE_TOKEN; // 1B tokens
 const TRIGGER_LAUNCH: u256 = MAX_SUPPLY * 80 / 100; // 80% of max supply
 // Bonding curve parameters
-// const BASE_X1E18: felt252 = 5;
-// const EXPONENT_X1E18: felt252 = 613020000;
+
 const BASE_X1E18: felt252 = 5000000; //000;
 const EXPONENT_X1E18: felt252 = 2555000000000;
 
@@ -174,8 +173,9 @@ fn test_price_increases() {
         ante_ante_penultimate_ten_percent_ratio
     );
     // assert!(
-    //     last_ten_percent_ratio > penultimate_ten_percent_ratio, "Price should increase with supply"
-    // );
+//     last_ten_percent_ratio > penultimate_ten_percent_ratio, "Price should increase with
+//     supply"
+// );
 }
 
 #[test]
