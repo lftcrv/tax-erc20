@@ -29,7 +29,7 @@ const TRIGGER_LAUNCH: u256 = MAX_SUPPLY * 80 / 100; // 80% of max supply
 // Bonding curve parameters
 // const BASE_X1E18: felt252 = 5;
 // const EXPONENT_X1E18: felt252 = 613020000;
-const BASE_X1E18: felt252 = 5000000000;
+const BASE_X1E18: felt252 = 5000000;//000;
 const EXPONENT_X1E18: felt252 = 2555000000000;
 
 const STEP: u32 = 3000;
@@ -162,10 +162,10 @@ fn test_price_increases() {
         base_buy_x100
     );
 
-    let last_ten_percent_ratio = base_buy_x100 * 100 / base_90_perc;
-    let penultimate_ten_percent_ratio = base_90_perc * 100 / base_80_perc;
-    let ante_penultimate_ten_percent_ratio = base_80_perc * 100 / base_70_perc;
-    let ante_ante_penultimate_ten_percent_ratio = base_70_perc * 100 / base_60_perc;
+    let last_ten_percent_ratio = base_buy_x100 * 10000 / base_90_perc;
+    let penultimate_ten_percent_ratio = base_90_perc * 10000 / base_80_perc;
+    let ante_penultimate_ten_percent_ratio = base_80_perc * 10000 / base_70_perc;
+    let ante_ante_penultimate_ten_percent_ratio = base_70_perc * 10000 / base_60_perc;
     println!(
         "ratios: {}, {}, {}, {}",
         last_ten_percent_ratio,
@@ -266,9 +266,9 @@ fn test_launch_trigger() {
     cheat_caller_address(bonding.contract_address, eth_holder, CheatSpan::TargetCalls(1));
     let eth_required = bonding.buy(over_trigger);
     stop_cheat_caller_address(eth_holder);
-let tax_protocol: ContractAddress =EMPTY_WALLET_PROTOCOL.try_into().unwrap();   
-    let taxes =  eth.balance_of(tax_protocol);
-    let expected_taxes = eth_required - (eth_required / 105 * 100 );
+    let tax_protocol: ContractAddress = EMPTY_WALLET_PROTOCOL.try_into().unwrap();
+    let taxes = eth.balance_of(tax_protocol);
+    let expected_taxes = eth_required - (eth_required / 105 * 100);
     println!("expected taxes: {} -> real_taxe {}", expected_taxes, taxes);
     assert!(taxes == expected_taxes, "Taxes should be 5% of ETH spent");
 
@@ -278,7 +278,9 @@ let tax_protocol: ContractAddress =EMPTY_WALLET_PROTOCOL.try_into().unwrap();
     // Verify supply is capped
     let creator = bonding.creator();
     let pair_contract = IERC20Dispatcher { contract_address: bonding.get_pair() };
-    assert!(pair_contract.balanceOf(0x1.try_into().unwrap()) > 0, "Creator should  have  LP tokens");
+    assert!(
+        pair_contract.balanceOf(0x1.try_into().unwrap()) > 0, "Creator should  have  LP tokens"
+    );
 
     assert!(bonding.total_supply() <= MAX_SUPPLY, "Supply should not exceed launch trigger");
 }
