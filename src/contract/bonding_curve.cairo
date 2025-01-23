@@ -23,6 +23,7 @@ mod BondingCurve {
     const MANTISSA_1e6: u256 = 1000000;
 
 
+    const SCALING_FACTOR: u256 = 18446744073709552000; // 2^64 ( use with fixed.into().felt())
     // Constants
     const ETH: felt252 = 0x049d36570d4e46f48e99674bd3fcc84644ddd6b96f7c741b1562b82f9e004dc7;
 
@@ -31,7 +32,6 @@ mod BondingCurve {
 
     // Bonding curve parameters
 
-    const SCALING_FACTOR: u256 = 18446744073709552000; // 2^64
     const MAX_SUPPLY: u256 = 1000000000 * MANTISSA_1e6;
     const TRIGGER_LAUNCH: u256 = MAX_SUPPLY * 80 / 100;
     const LP_SUPPLY: u256 = MAX_SUPPLY - TRIGGER_LAUNCH;
@@ -100,7 +100,7 @@ mod BondingCurve {
     fn constructor(
         ref self: ContractState,
         _protocol_wallet: ContractAddress,
-        _owner: ContractAddress,
+        _creator: ContractAddress,
         _name: ByteArray,
         _symbol: ByteArray,
         price_x1e9: felt252,
@@ -112,15 +112,15 @@ mod BondingCurve {
         let mantissa: u64 = MANTISSA_1e18.try_into().unwrap();
         let base_price_ = FixedTrait::from_unscaled_felt(price_x1e9) / mantissa.into();
         let exponent_ = FixedTrait::from_unscaled_felt(exponent_x1e9) / mantissa.into();
-        assert!(buy_tax_percentage_x100 < 1000, "BondingCurve: Buy tax too high");
-        assert!(sell_tax_percentage_x100 < 1000, "BondingCurve: Sell tax too high");
+        assert!(buy_tax_percentage_x100 < 1000, "BondingCurve: Buy tax >= 10%");
+        assert!(sell_tax_percentage_x100 < 1000, "BondingCurve: Sell tax >= 10%");
         self.step.write(_step.into());
         self.base_price.write(base_price_);
         self.exponent.write(exponent_);
         self.erc20.initializer(_name, _symbol);
         self.buy_tax.write(buy_tax_percentage_x100);
         self.sell_tax.write(sell_tax_percentage_x100);
-        self.creator.write(_owner);
+        self.creator.write(_creator);
         self.protocol.write(_protocol_wallet);
         self.controlled_market_cap.write(0);
         self.is_bond_closed.write(false);
@@ -342,13 +342,10 @@ mod BondingCurve {
 
             let eth_address = ETH.try_into().expect('ETH address is invalid');
             let router_address = ROUTER_ADDRESS.try_into().expect('Router address is invalid');
-            // let factory_address = FACTORY_ADDRESS.try_into().expect('Factory address is
-            // invalid');
+
 
             let eth_contract = IERC20Dispatcher { contract_address: eth_address };
-            // let factory_contract = IFactoryDispatcher { contract_address: factory_address, };
             let router_contract = IRouterDispatcher { contract_address: router_address };
-            // let pair_address = factory_contract.create_pair(eth_address, this_address);
 
             eth_contract.approve(router_address, ~0_u256);
             self.erc20._approve(this_address, router_address, ~0_u256);
@@ -392,8 +389,6 @@ mod BondingCurve {
 
         /// Internal functions READ
 
-        // Add this to your constants section
-        // This can be changed to any value you want
         fn _calculate_supply(self: @ContractState, price: Fixed,) -> u256 {
             let (_, base_normalized, exponent_normalized) = self._get_price_consts();
             let mantissa_1e6 = FixedTrait::from_unscaled_felt(MANTISSA_1e6.try_into().unwrap());
