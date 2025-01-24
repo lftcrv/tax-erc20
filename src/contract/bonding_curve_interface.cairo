@@ -17,7 +17,7 @@ pub trait IBondingCurve<TContractState> {
     fn simulate_sell(self: @TContractState, token_amount: u256) -> u256;
     fn get_taxes(self: @TContractState) -> (u16, u16);
     fn get_pair(self: @TContractState) -> ContractAddress;
-    fn supply_advancement_ratio_x100(self: @TContractState) -> u256;
+    fn supply_advancement_percentage_x100(self: @TContractState) -> u16;
     // ERC20 standard functions
     fn total_supply(self: @TContractState) -> u256;
     fn balance_of(self: @TContractState, account: ContractAddress) -> u256;

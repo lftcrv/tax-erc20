@@ -216,8 +216,8 @@ mod BondingCurve {
         }
 
         #[external(v0)]
-        fn supply_advancement_ratio_x100(self: @ContractState) -> u256 {
-            self.total_supply() * 10_000 / TRIGGER_LAUNCH
+        fn supply_advancement_percentage_x100(self: @ContractState) -> u16 {
+            (self.total_supply() * 10_000 / TRIGGER_LAUNCH).try_into().expect('Supply overflow')
         }
 
 
