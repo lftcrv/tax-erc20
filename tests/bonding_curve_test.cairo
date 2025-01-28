@@ -3,6 +3,9 @@ use snforge_std::{
     declare, ContractClassTrait, DeclareResultTrait, start_cheat_caller_address,
     stop_cheat_caller_address, cheat_caller_address, CheatSpan
 };
+use openzeppelin_token::erc20::{
+    ERC20Component, interface::{IERC20DispatcherTrait, IERC20Dispatcher}
+};
 
 // Constants
 const ETH: felt252 = 0x049d36570d4e46f48e99674bd3fcc84644ddd6b96f7c741b1562b82f9e004dc7;
@@ -65,17 +68,18 @@ pub trait IBondingCurve<TContractState> {
     fn sell(ref self: TContractState, token_amount: u256) -> u256;
     fn skim(ref self: TContractState) -> u256;
 }
-#[starknet::interface]
-trait IERC20<TContractState> {
-    fn approve(ref self: TContractState, spender: ContractAddress, amount: u256);
-    fn decimals(self: @TContractState) -> u8;
-    fn balance_of(self: @TContractState, owner: ContractAddress) -> u256;
-    fn balanceOf(self: @TContractState, owner: ContractAddress) -> u256;
-    fn transfer(ref self: TContractState, recipient: ContractAddress, amount: u256);
-    fn transfer_from(
-        ref self: TContractState, sender: ContractAddress, recipient: ContractAddress, amount: u256
-    );
-}
+// #[starknet::interface]
+// trait IERC20<TContractState> {
+//     fn approve(ref self: TContractState, spender: ContractAddress, amount: u256);
+//     fn decimals(self: @TContractState) -> u8;
+//     fn balance_of(self: @TContractState, owner: ContractAddress) -> u256;
+//     fn balanceOf(self: @TContractState, owner: ContractAddress) -> u256;
+//     fn transfer(ref self: TContractState, recipient: ContractAddress, amount: u256);
+//     fn transfer_from(
+//         ref self: TContractState, sender: ContractAddress, recipient: ContractAddress, amount:
+//         u256
+//     );
+// }
 
 fn deploy_bonding_curve(buy_tax: u16, sell_tax: u16) -> ContractAddress {
     let contract = declare("BondingCurve").expect('Declaration failed').contract_class();
