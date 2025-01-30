@@ -1,5 +1,5 @@
 #[starknet::contract]
-mod LPGradualLock {
+mod GradualLocker {
     // Imports grouped by functionality
     // use starknet::event::EventEmitter;
     use starknet::event::EventEmitter;
@@ -39,8 +39,6 @@ mod LPGradualLock {
         token_locked_by_user: Map<ContractAddress, Map<ContractAddress, TokenLocked>>,
     }
 
-    // #[constructor]
-    // fn constructor() {}
 
     #[generate_trait]
     #[abi(per_item)]
@@ -52,7 +50,7 @@ mod LPGradualLock {
             amount: u256,
             end_timestamp: u64,
             owner: ContractAddress,
-        ) {
+        ) -> TokenLocked {
             assert!(amount != 0, "No empty amount");
             assert!(end_timestamp > get_block_timestamp(), " Cannot lock antero");
             let old_token = self.token_locked_by_user.entry(owner).entry(token).read();
@@ -69,16 +67,54 @@ mod LPGradualLock {
             erc20_token.transfer_from(get_caller_address(), get_contract_address(), amount);
             self.emit(Event::LPLocked(token_locked));
             self.token_locked_by_user.entry(owner).entry(token).write(token_locked);
+            token_locked
+        }
+        #[external(v0)]
+        fn get_lock(
+            self: @ContractState, owner: ContractAddress, token: ContractAddress,
+        ) -> TokenLocked {
+            self.token_locked_by_user.entry(owner).entry(token).read()
         }
 
         #[external(v0)]
-        fn claim(ref self: ContractState, token: ContractAddress, owner: ContractAddress,) {
+        fn lockCamel(
+            ref self: ContractState,
+            token: ContractAddress,
+            amount: u256,
+            end_timestamp: u64,
+            owner: ContractAddress,
+        ) -> TokenLocked {
+            assert!(amount != 0, "No empty amount");
+            assert!(end_timestamp > get_block_timestamp(), " Cannot lock antero");
+            let owner_felt: felt252 = owner.into();
+            println!("owner: {}", owner_felt);
+            let old_token = self.token_locked_by_user.entry(owner).entry(token).read();
+            assert!(old_token.initial_amount == 0, " Cannot lock twice the same lp per owner");
+
+            let token_locked = TokenLocked {
+                end_timestamp,
+                start_timestamp: get_block_timestamp(),
+                initial_amount: amount,
+                current_amount: amount,
+                owner
+            };
+            let erc20_token = IERC20MixinDispatcher { contract_address: token };
+            erc20_token.transferFrom(get_caller_address(), get_contract_address(), amount);
+            self.emit(Event::LPLocked(token_locked));
+            self.token_locked_by_user.entry(owner).entry(token).write(token_locked);
+            token_locked
+        }
+
+        #[external(v0)]
+        fn claim(ref self: ContractState, token: ContractAddress) -> u256 {
             // let
             let mut token_info = self
                 .token_locked_by_user
                 .entry(get_caller_address())
                 .entry(token)
                 .read();
+            let caller: felt252 = get_caller_address().into();
+            println!("token_info: {:?}", caller);
             assert!(token_info.current_amount != 0, "Cannot claim for empty lock");
             let token_contract = IERC20MixinDispatcher { contract_address: token };
             let time_diff: u64 = token_info.end_timestamp - token_info.start_timestamp;
@@ -91,7 +127,7 @@ mod LPGradualLock {
                     * now_diff.into()
                     / time_diff.into();
                 let already_claimed = token_info.initial_amount - token_info.current_amount;
-                assert!(max_claimable <= already_claimed, "Already claimed");
+                assert!(max_claimable >= already_claimed, "Already claimed");
                 max_claimable - already_claimed
             };
 
@@ -100,7 +136,7 @@ mod LPGradualLock {
             }
 
             token_info.current_amount -= amount;
-            self.token_locked_by_user.entry(owner).entry(token).write(token_info);
+            self.token_locked_by_user.entry(get_caller_address()).entry(token).write(token_info);
             self
                 .emit(
                     Event::LPClaimed(
@@ -111,6 +147,11 @@ mod LPGradualLock {
                 );
 
             token_contract.transfer(get_caller_address(), amount.into());
+            amount
+        }
+
+        fn supports_interface(interface_id: felt252) -> bool {
+            interface_id == 0xb8d81441e297b31db874ccc7e13400572864b7194343047d5b1f49cae8560e
         }
     }
 }

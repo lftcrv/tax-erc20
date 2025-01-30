@@ -1,12 +1,37 @@
 use starknet::ContractAddress;
 use snforge_std::{
     declare, ContractClassTrait, DeclareResultTrait, start_cheat_caller_address,
-    stop_cheat_caller_address, cheat_caller_address, CheatSpan
+    stop_cheat_caller_address, cheat_caller_address, start_cheat_block_timestamp_global,
+    stop_cheat_block_timestamp, start_cheat_block_timestamp, CheatSpan
 };
+use starknet::get_block_timestamp;
 use openzeppelin_token::erc20::{
-    ERC20Component, interface::{IERC20DispatcherTrait, IERC20Dispatcher}
+    ERC20Component,
+    interface::{
+        IERC20DispatcherTrait, IERC20Dispatcher, IERC20MixinDispatcher, IERC20MixinDispatcherTrait
+    }
 };
 
+
+#[starknet::interface]
+pub trait IGradualLocker<TContractState> {
+    fn claim(ref self: TContractState, token: ContractAddress) -> u256;
+    fn lock(
+        ref self: TContractState,
+        token: ContractAddress,
+        amount: u256,
+        end_timestamp: u64,
+        owner: ContractAddress,
+    );
+    fn lockCamel(
+        ref self: TContractState,
+        token: ContractAddress,
+        amount: u256,
+        end_timestamp: u64,
+        owner: ContractAddress,
+    );
+    fn supports_interface(self: @TContractState, interface_id: felt252) -> bool;
+}
 // Constants
 const ETH: felt252 = 0x049d36570d4e46f48e99674bd3fcc84644ddd6b96f7c741b1562b82f9e004dc7;
 const ETH_HOLDER: felt252 = 0x0213c67ed78bc280887234fe5ed5e77272465317978ae86c25a71531d9332a2d;
@@ -39,6 +64,7 @@ const STEP: u32 = 3000;
 pub trait IBondingCurve<TContractState> {
     // View functions
     fn name(self: @TContractState) -> ByteArray;
+    fn locker(self: @TContractState) -> ContractAddress;
     fn creator(self: @TContractState) -> ContractAddress;
     fn symbol(self: @TContractState) -> ByteArray;
     fn decimals(self: @TContractState) -> u8;
@@ -83,6 +109,7 @@ pub trait IBondingCurve<TContractState> {
 
 fn deploy_bonding_curve(buy_tax: u16, sell_tax: u16) -> ContractAddress {
     let contract = declare("BondingCurve").expect('Declaration failed').contract_class();
+    let router = deploy_router();
 
     let calldata: Array<felt252> = array![
         EMPTY_WALLET_PROTOCOL,
@@ -99,10 +126,17 @@ fn deploy_bonding_curve(buy_tax: u16, sell_tax: u16) -> ContractAddress {
         EXPONENT_X1E18.into(),
         STEP.into(),
         buy_tax.into(),
-        sell_tax.into()
+        sell_tax.into(),
+        router.into()
     ];
 
-    let (contract_address, _) = contract.deploy(@calldata).expect('Deployment failed');
+    let (contract_address, _) = contract.deploy(@calldata).expect('Bonding Deployment failed');
+    contract_address
+}
+fn deploy_router() -> ContractAddress {
+    let contract = declare("GradualLocker").expect('Declaration failed').contract_class();
+
+    let (contract_address, _) = contract.deploy(@array![]).expect('Locker Deployment failed');
     contract_address
 }
 
@@ -280,18 +314,40 @@ fn test_launch_trigger() {
     println!("Actual supply after buy: {}", bonding.total_supply());
     println!("test_launch_triggerETH spent: {}", eth_required);
     // Verify supply is capped
-    let creator = bonding.creator();
-    let pair_contract = IERC20Dispatcher { contract_address: bonding.get_pair() };
-    assert!(
-        pair_contract.balance_of(0x1.try_into().unwrap()) > 0, "Creator should  have  LP tokens"
+    // let creator = bonding.creator();
+    let pair_contract = IERC20MixinDispatcher { contract_address: bonding.get_pair() };
+    let router = IGradualLockerDispatcher { contract_address: bonding.locker() };
+
+    println!("Pair contract address: {:?}", bonding.get_pair());
+    let lp_bal = pair_contract.balanceOf(bonding.contract_address);
+    let one_year = 31536000;
+    let now: u64 = get_block_timestamp().try_into().unwrap();
+
+    start_cheat_caller_address(router.contract_address, EMPTY_WALLET_PROTOCOL.try_into().unwrap());
+    start_cheat_block_timestamp(router.contract_address, now + one_year);
+    println!("Protocol : {:?}", EMPTY_WALLET_PROTOCOL);
+    let lp_after_1_year: u256 = router.claim(bonding.get_pair());
+
+    stop_cheat_block_timestamp(router.contract_address);
+    start_cheat_block_timestamp(router.contract_address, now + one_year * 2);
+    let lp_after_2_year: u256 = router.claim(bonding.get_pair());
+
+    stop_cheat_block_timestamp(router.contract_address);
+    stop_cheat_caller_address(router.contract_address);
+    println!(
+        "LP claim for 1 year: {} -> LP claim for 2 year: {}", lp_after_1_year, lp_after_2_year
     );
+    assert!(
+        lp_after_1_year == lp_after_2_year, "LP claim for same timestamp diff should be the same"
+    );
+    println!("LP tokens: {}", lp_bal);
 
     assert!(bonding.total_supply() <= MAX_SUPPLY, "Supply should not exceed launch trigger");
 }
 
 #[test]
 #[fork("MAINNET_LATEST")]
-fn test_launch_trigger_multiple() {
+fn test_multiple_buy_launch_trigger() {
     let (eth_holder, eth_address, eth, bonding) = setup_contracts();
 
     start_cheat_caller_address(eth_address, eth_holder);

@@ -2,7 +2,7 @@
 mod BondingCurve {
     // Imports grouped by functionality
     use starknet::event::EventEmitter;
-    use starknet::{ContractAddress, get_caller_address, get_contract_address};
+    use starknet::{ContractAddress, get_caller_address, get_contract_address, get_block_timestamp};
     use core::{starknet::storage::{StoragePointerReadAccess, StoragePointerWriteAccess}};
     use openzeppelin_introspection::interface::{ISRC5Dispatcher, ISRC5DispatcherTrait, ISRC5_ID};
     // OpenZeppelin imports
@@ -12,11 +12,14 @@ mod BondingCurve {
 
     // Local imports
     use crate::contract::interfaces::{
-        IRouterDispatcher, IRouterDispatcherTrait, IFactoryDispatcher, IFactoryDispatcherTrait
+        IRouterDispatcher, IRouterDispatcherTrait, IFactoryDispatcher, IFactoryDispatcherTrait,
+        IGradualLockerDispatcher, IGradualLockerDispatcherTrait, GRADUAL_LOCKER_ID, TokenLocked
     };
+
     use cubit::f128::types::fixed::{Fixed, FixedTrait, FixedZero};
 
 
+    const TIME_OF_LOCK: u64 = 63072000;
     const MANTISSA_1e18: u256 = 1000000000000000000;
     const MANTISSA_1e12: u256 = 1000000000000;
     const MANTISSA_1e9: u256 = 1000000000;
@@ -74,6 +77,7 @@ mod BondingCurve {
         is_bond_closed: bool,
         #[substorage(v0)]
         erc20: ERC20Component::Storage,
+        locker: ContractAddress
     }
 
     // Events
@@ -105,8 +109,14 @@ mod BondingCurve {
         exponent_x1e18: felt252,
         _step: u32,
         _buy_tax_percentage_x100: u16,
-        _sell_tax_percentage_x100: u16
+        _sell_tax_percentage_x100: u16,
+        _locker: ContractAddress
     ) {
+        let _locker_contract = IGradualLockerDispatcher { contract_address: _locker };
+        // assert!(
+        //     _locker_contract.supports_interface(GRADUAL_LOCKER_ID),
+        //     "Locker does not support the interface"
+        // );
         let mantissa: u64 = MANTISSA_1e18.try_into().unwrap();
         let _base_price = FixedTrait::from_unscaled_felt(price_x1e18) / mantissa.into();
         let _exponent = FixedTrait::from_unscaled_felt(exponent_x1e18) / mantissa.into();
@@ -122,6 +132,7 @@ mod BondingCurve {
         self.protocol.write(_protocol_wallet);
         self.controlled_market_cap.write(0);
         self.is_bond_closed.write(false);
+        self.locker.write(_locker);
     }
 
 
@@ -131,6 +142,10 @@ mod BondingCurve {
         #[external(v0)]
         fn name(self: @ContractState) -> ByteArray {
             self.erc20.ERC20_name.read()
+        }
+        #[external(v0)]
+        fn locker(self: @ContractState) -> ContractAddress {
+            self.locker.read()
         }
         #[external(v0)]
         fn creator(self: @ContractState) -> ContractAddress {
@@ -357,7 +372,7 @@ mod BondingCurve {
                     LP_SUPPLY,
                     0,
                     0,
-                    0x1.try_into().unwrap(), //self.protocol.read(),
+                    this_address,
                     18446744073709552000
                 );
             let factory_address = IFactoryDispatcher {
@@ -366,7 +381,15 @@ mod BondingCurve {
 
             let pair_address = factory_address.get_pair(eth_address, this_address);
             self.pair_address.write(pair_address);
-
+            let locker_contract = IGradualLockerDispatcher { contract_address: self.locker.read() };
+            let pair_contract = IERC20Dispatcher { contract_address: pair_address };
+            pair_contract.approve(self.locker.read(), amount_lp);
+            let end_time: u64 = get_block_timestamp().try_into().unwrap() + TIME_OF_LOCK;
+            let token_locked: TokenLocked = locker_contract
+                .lockCamel(pair_address, amount_lp, end_time, self.protocol.read());
+            assert!(
+                token_locked.current_amount == amount_lp, "Locker did not lock the correct amount"
+            );
             self
                 .emit(
                     Event::PoolLaunched(
