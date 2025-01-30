@@ -283,7 +283,7 @@ fn test_launch_trigger() {
     let creator = bonding.creator();
     let pair_contract = IERC20Dispatcher { contract_address: bonding.get_pair() };
     assert!(
-        pair_contract.balanceOf(0x1.try_into().unwrap()) > 0, "Creator should  have  LP tokens"
+        pair_contract.balance_of(0x1.try_into().unwrap()) > 0, "Creator should  have  LP tokens"
     );
 
     assert!(bonding.total_supply() <= MAX_SUPPLY, "Supply should not exceed launch trigger");
