@@ -324,22 +324,30 @@ fn test_launch_trigger() {
     let now: u64 = get_block_timestamp().try_into().unwrap();
 
     start_cheat_caller_address(router.contract_address, EMPTY_WALLET_PROTOCOL.try_into().unwrap());
-    start_cheat_block_timestamp(router.contract_address, now + one_year);
+    start_cheat_block_timestamp(router.contract_address, now + one_year / 2);
     println!("Protocol : {:?}", EMPTY_WALLET_PROTOCOL);
+    let lp_after_6_month: u256 = router.claim(bonding.get_pair());
+
+    stop_cheat_block_timestamp(router.contract_address);
+    start_cheat_block_timestamp(router.contract_address, now + one_year);
     let lp_after_1_year: u256 = router.claim(bonding.get_pair());
 
     stop_cheat_block_timestamp(router.contract_address);
+
     start_cheat_block_timestamp(router.contract_address, now + one_year * 2);
     let lp_after_2_year: u256 = router.claim(bonding.get_pair());
 
     stop_cheat_block_timestamp(router.contract_address);
+
+
     stop_cheat_caller_address(router.contract_address);
     println!(
-        "LP claim for 1 year: {} -> LP claim for 2 year: {}", lp_after_1_year, lp_after_2_year
+        "LP claim 6 month : {}LP claim for 1 year: {} -> LP claim for 2 year: {}", lp_after_6_month,lp_after_1_year, lp_after_2_year
     );
     assert!(
-        lp_after_1_year == lp_after_2_year, "LP claim for same timestamp diff should be the same"
+        lp_after_6_month == lp_after_1_year, "LP claim for same timestamp diff should be the same"
     );
+    assert!(lp_after_2_year == lp_after_1_year * 2, "LP claim for 1 (all the secone) year should be double of 6 mont");
     println!("LP tokens: {}", lp_bal);
 
     assert!(bonding.total_supply() <= MAX_SUPPLY, "Supply should not exceed launch trigger");
