@@ -13,7 +13,7 @@ dotenv.config();
 // RPC endpoints
 const RPC_URLS = {
   MAINNET: "https://starknet-mainnet.public.blastapi.io/rpc/v0_7",
-  DEVNET: "https://starknet-sepolia.public.blastapi.io",
+  TESTNET: "https://starknet-sepolia.public.blastapi.io",
 } as const;
 
 interface TransactionResponse {
@@ -24,25 +24,25 @@ interface TransactionResponse {
 // Constructor arguments interface
 type ConstructorArgs = {
   _protocol_wallet: string;
-  _owner: string;
+  _creator: string;
   _name: string;
   _symbol: string;
-  price_x1e9: number;
-  exponent_x1e9: number;
-  step: number;
-  buy_tax_percentage_x100: number;
-  sell_tax_percentage_x100: number;
+  price_x1e18: number;
+  exponent_x1e18: number;
+  _step: number;
+  _buy_tax_percentage_x100: number;
+  _sell_tax_percentage_x100: number;
 };
 
 /**
  * Deploys a bonding curve contract
  * @param args Constructor arguments for the contract
- * @param isDevnet Whether to deploy to devnet or mainnet
+ * @param isTestnet Whether to deploy to testnet or mainnet
  * @returns The deployed contract instance and deployment details
  */
 async function deployBondingCurve(
   args: ConstructorArgs,
-  isDevnet: boolean = true
+  isTestnet: boolean = true
 ) {
   try {
     // Read and parse contract JSON
@@ -61,12 +61,13 @@ async function deployBondingCurve(
     );
     // Initialize provider
     const provider = new RpcProvider({
-      nodeUrl: isDevnet ? RPC_URLS.DEVNET : RPC_URLS.MAINNET,
+      nodeUrl: isTestnet ? RPC_URLS.TESTNET : RPC_URLS.MAINNET,
     });
 
     // Initialize account
-    const privateKey = isDevnet ? process.env.DEV_PK : process.env.MAIN_PK;
-    const accountAddress = isDevnet
+    console.log("isTestnet:", isTestnet);
+    const privateKey = isTestnet ? process.env.DEV_PK : process.env.MAIN_PK;
+    const accountAddress = isTestnet
       ? process.env.DEV_ADDRESS
       : process.env.MAIN_ADDRESS;
 
@@ -100,7 +101,7 @@ async function deployBondingCurve(
     console.log({
       //   classHash: deployResponse.declare.class_hash,
       contractAddress: deployedContract.address,
-      //   network: isDevnet ? "devnet" : "mainnet",
+      //   network: isTestnet ? "testnet" : "mainnet",
     });
 
     return {
@@ -118,15 +119,15 @@ async function main() {
   await deployBondingCurve({
     _protocol_wallet:
       "0x04D8eB0b92839aBd23257c32152a39BfDb378aDc0366ca92e2a4403353BAad51",
-    _owner:
+    _creator:
       "0x04D8eB0b92839aBd23257c32152a39BfDb378aDc0366ca92e2a4403353BAad51",
     _name: "LeftCurve",
     _symbol: "LFTCRV",
-    price_x1e9: 5,
-    exponent_x1e9: 613020000,
-    step: 1e6,
-    buy_tax_percentage_x100: 500,
-    sell_tax_percentage_x100: 1000,
+    price_x1e18: 5,
+    exponent_x1e18: 613020000,
+    _step: 1e6,
+    _buy_tax_percentage_x100: 500,
+    _sell_tax_percentage_x100: 1000,
   });
 }
 

@@ -1,9 +1,16 @@
 {
-	"dependencies": {
-		"mathjs": "^14.0.1",
-		"starknet": "^6.11.0"
-	},
-	"devDependencies": {
-		"@types/node": "^22.10.7"
-	}
+  "dependencies": {
+    "dotenv": "^16.4.7",
+    "mathjs": "^14.0.1",
+    "starknet": "^6.11.0",
+    "typescript": "^5.7.3"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.7",
+    "ts-node": "^10.9.2",
+    "tsx": "^4.19.2"
+  },
+  "scripts": {
+    "deploy": "npx tsx deploy_script.ts"
+  }
 }
