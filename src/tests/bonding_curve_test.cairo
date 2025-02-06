@@ -402,17 +402,22 @@ fn test_buy_sub_underflow() {
     stop_cheat_caller_address(eth_address);
 
     // Buy tokens
-    let buy_amount = 1000;
+    let buy_amount = 100;
+    let eth_bal_before = eth.balance_of(eth_holder);
+    println!("ETH balance before: {}", eth_bal_before);
 
     start_cheat_caller_address(bonding.contract_address, eth_holder);
-    let eth_spent = bonding.buy(1);
     println!("price: {}", bonding.get_current_price());
+    let eth_spent = bonding.buy(buy_amount);
     println!("ETH spent for buy: {}", eth_spent);
     let (expected_eth, tax) = bonding.simulate_buy(buy_amount);
     println!("price: {}", bonding.get_current_price());
     println!("Expected ETH from buy: {} and tax {}", expected_eth, tax);
     let eth_spent = bonding.buy(buy_amount);
     stop_cheat_caller_address(bonding.contract_address);
+
+    let eth_bal_after = eth.balance_of(eth_holder);
+    println!("ETH balance change: {}", eth_bal_before - eth_bal_after);
 
     println!("ETH spent for buy: {}", eth_spent);
     println!("New total supply: {}", bonding.total_supply());
