@@ -49,15 +49,19 @@ pub mod GradualLocker {
             let old_token = self.token_locked_by_user.entry(owner).entry(token).read();
             assert!(old_token.initial_amount == 0, " Cannot lock twice the same lp per owner");
 
+            let caller = get_caller_address();
+            let this = get_contract_address();
+            let timestamp = get_block_timestamp();
+
             let token_locked = TokenLocked {
                 end_timestamp,
-                start_timestamp: get_block_timestamp(),
+                start_timestamp: timestamp,
                 initial_amount: amount,
                 current_amount: amount,
                 owner
             };
             let erc20_token = IERC20MixinDispatcher { contract_address: token };
-            erc20_token.transfer_from(get_caller_address(), get_contract_address(), amount);
+            erc20_token.transfer_from(caller, this, amount);
             self.emit(Event::LPLocked(token_locked));
             self.token_locked_by_user.entry(owner).entry(token).write(token_locked);
             token_locked
@@ -78,35 +82,38 @@ pub mod GradualLocker {
             end_timestamp: u64,
             owner: ContractAddress,
         ) -> TokenLocked {
+            let caller = get_caller_address();
+            let this = get_contract_address();
+            let timestamp = get_block_timestamp();
+
             assert!(amount != 0, "No empty amount");
-            assert!(end_timestamp > get_block_timestamp(), " Cannot lock antero");
+            assert!(end_timestamp > timestamp, " Cannot lock antero");
             let old_token = self.token_locked_by_user.entry(owner).entry(token).read();
             assert!(old_token.initial_amount == 0, " Cannot lock twice the same lp per owner");
 
             let token_locked = TokenLocked {
                 end_timestamp,
-                start_timestamp: get_block_timestamp(),
+                start_timestamp: timestamp,
                 initial_amount: amount,
                 current_amount: amount,
                 owner
             };
             let erc20_token = IERC20MixinDispatcher { contract_address: token };
-            erc20_token.transferFrom(get_caller_address(), get_contract_address(), amount);
+            erc20_token.transferFrom(caller, this, amount);
             self.emit(Event::LPLocked(token_locked));
             self.token_locked_by_user.entry(owner).entry(token).write(token_locked);
             token_locked
         }
 
         fn claim(ref self: ContractState, token: ContractAddress) -> u256 {
-            let mut token_info = self
-                .token_locked_by_user
-                .entry(get_caller_address())
-                .entry(token)
-                .read();
+            let caller = get_caller_address();
+            let timestamp = get_block_timestamp();
+
+            let mut token_info = self.token_locked_by_user.entry(caller).entry(token).read();
             assert!(token_info.current_amount != 0, "Cannot claim for empty lock");
             let token_contract = IERC20MixinDispatcher { contract_address: token };
             let time_diff: u64 = token_info.end_timestamp - token_info.start_timestamp;
-            let now_diff: u64 = get_block_timestamp() - token_info.start_timestamp;
+            let now_diff: u64 = timestamp - token_info.start_timestamp;
 
             let amount = if now_diff > time_diff {
                 token_info.current_amount
@@ -119,12 +126,10 @@ pub mod GradualLocker {
                 max_claimable - already_claimed
             };
 
-            if amount == 0 {
-                panic!("Cannot claim for empty lock");
-            }
+            assert!(amount != 0, "Cannot claim for empty lock");
 
             token_info.current_amount -= amount;
-            self.token_locked_by_user.entry(get_caller_address()).entry(token).write(token_info);
+            self.token_locked_by_user.entry(caller).entry(token).write(token_info);
             self
                 .emit(
                     Event::LPClaimed(
@@ -134,7 +139,7 @@ pub mod GradualLocker {
                     )
                 );
 
-            token_contract.transfer(get_caller_address(), amount.into());
+            token_contract.transfer(caller, amount.into());
             amount
         }
 

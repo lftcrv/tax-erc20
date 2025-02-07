@@ -150,41 +150,33 @@ pub mod BondingCurve {
             self.creator.read()
         }
 
-
         fn symbol(self: @ContractState) -> ByteArray {
             self.erc20.ERC20_symbol.read()
         }
 
-
         fn decimals(self: @ContractState) -> u8 {
             6
         }
-        // View functions
 
         fn get_current_price(self: @ContractState) -> u256 {
             self.get_price_for_supply(self.erc20.total_supply())
         }
 
-
         fn get_pair(self: @ContractState) -> ContractAddress {
             self.pair_address.read()
         }
-
 
         fn buy_tax_percentage_x100(self: @ContractState) -> u16 {
             self.buy_tax.read()
         }
 
-
         fn sell_tax_percentage_x100(self: @ContractState) -> u16 {
             self.sell_tax.read()
         }
 
-
         fn market_cap(self: @ContractState) -> u256 {
             self.controlled_market_cap.read()
         }
-
 
         // Price calculation functions
 
@@ -199,7 +191,6 @@ pub mod BondingCurve {
                 / mantissa_1e6; // Reduce the sze of the supply
             self._calculate_price(supply_normalized)
         }
-
 
         fn market_cap_for_price(self: @ContractState, price: u256) -> u256 {
             let price_normalized: Fixed = FixedTrait::from_unscaled_felt(
@@ -216,23 +207,19 @@ pub mod BondingCurve {
             self._simulate_buy(token_amount)
         }
 
-
         fn simulate_sell(self: @ContractState, token_amount: u256) -> (u256, u256) {
             self._simulate_sell(token_amount)
         }
 
-
         fn get_taxes(self: @ContractState) -> (u16, u16) {
             (self.buy_tax.read().into(), self.sell_tax.read().into())
         }
-
 
         fn supply_advancement_percentage_x100(self: @ContractState) -> u16 {
             (self.erc20.total_supply() * 10_000 / TRIGGER_LAUNCH)
                 .try_into()
                 .expect('Supply overflow')
         }
-
 
         fn buy(ref self: ContractState, token_amount: u256) -> u256 {
             self.require_in_bond_stage(true);
@@ -259,29 +246,28 @@ pub mod BondingCurve {
             total_amount_eth
         }
 
-
         fn sell(ref self: ContractState, token_amount: u256) -> u256 {
             self.require_in_bond_stage(true);
+
+            let caller = get_caller_address();
             assert!(
-                token_amount <= self.erc20.balance_of(get_caller_address()),
-                "BondingCurve: Insufficient balance"
+                token_amount <= self.erc20.balance_of(caller), "BondingCurve: Insufficient balance"
             );
-            assert!(token_amount > 0, "BondingCurve: amount 0");
             let (amount_eth_to_send, tax) = self._simulate_sell(token_amount);
             assert!(
                 self.market_cap() >= amount_eth_to_send + tax,
                 "BondingCurve: Insufficient market cap"
             );
-            self._execute_sell(amount_eth_to_send, tax, token_amount, get_caller_address());
+            self._execute_sell(amount_eth_to_send, tax, token_amount, caller);
             amount_eth_to_send
         }
-
 
         fn skim(ref self: ContractState) -> u256 {
             let eth_contract = IERC20Dispatcher { contract_address: ETH.try_into().unwrap() };
             let balance_eth = eth_contract.balance_of(get_contract_address());
-            if self.market_cap() < balance_eth {
-                self._transfer_tax(balance_eth - self.market_cap())
+            let market_cap = self.market_cap();
+            if market_cap < balance_eth {
+                self._transfer_tax(balance_eth - market_cap)
             } else {
                 0
             }
@@ -311,6 +297,7 @@ pub mod BondingCurve {
                     )
                 );
         }
+
         fn _execute_sell(
             ref self: ContractState,
             eth_amount: u256,
@@ -332,7 +319,6 @@ pub mod BondingCurve {
                     )
                 );
         }
-
 
         fn _increase_market_cap(ref self: ContractState, amount: u256) -> u256 {
             let new_market_cap = self.controlled_market_cap.read() + amount;
@@ -404,10 +390,9 @@ pub mod BondingCurve {
             }
         }
 
-
         /// Internal functions READ
 
-        fn _calculate_supply(self: @ContractState, price: Fixed,) -> u256 {
+        fn _calculate_supply(self: @ContractState, price: Fixed) -> u256 {
             let (_, base_normalized, exponent_normalized) = self._get_price_consts();
             let mantissa_1e6 = FixedTrait::from_unscaled_felt(MANTISSA_1e6.try_into().unwrap());
 
@@ -475,7 +460,6 @@ pub mod BondingCurve {
             ret_scaled.into() / SCALING_FACTOR
         }
 
-
         fn _get_price_consts(self: @ContractState) -> (Fixed, Fixed, Fixed) {
             let mantissa_1e9: Fixed = FixedTrait::from_unscaled_felt(
                 MANTISSA_1e9.try_into().unwrap()
@@ -483,6 +467,7 @@ pub mod BondingCurve {
 
             (mantissa_1e9, self.base_price.read(), self.exponent.read())
         }
+
         fn require_in_bond_stage(self: @ContractState, is_it: bool) {
             let is_bond_closed = self.is_bond_closed.read();
             if !is_it {
@@ -491,7 +476,6 @@ pub mod BondingCurve {
                 assert!(!is_bond_closed, "Bonding stage is still open");
             }
         }
-
 
         fn _simulate_sell(self: @ContractState, token_amount: u256) -> (u256, u256) {
             let current_supply = self._normalize_token(self.erc20.total_supply());
@@ -521,10 +505,12 @@ pub mod BondingCurve {
                 / MANTISSA_1e6; //Here the mantissa_1e6 because token decimals  6 but price and ether is 18
             self._simulate_buy_tax(eth_needed)
         }
+
         fn _simulate_buy_tax(self: @ContractState, amount: u256) -> (u256, u256) {
             let tax_amount = amount * self.buy_tax.read().into() / 10000_u256;
             (amount + tax_amount, tax_amount)
         }
+
         fn _simulate_sell_tax(self: @ContractState, amount: u256) -> (u256, u256) {
             let tax = amount * self.sell_tax.read().into() / 10000;
             (amount - tax, tax)
@@ -535,12 +521,14 @@ pub mod BondingCurve {
             eth_contract.transfer(self.protocol.read(), amount);
             amount
         }
+
         fn _normalize_token(self: @ContractState, token_amount: u256) -> Fixed {
             let mantissa_1e6: Fixed = FixedTrait::from_unscaled_felt(
                 MANTISSA_1e6.try_into().unwrap()
             );
             FixedTrait::from_unscaled_felt(token_amount.try_into().unwrap()) / mantissa_1e6
         }
+
         fn _normalize_ether(self: @ContractState, wei_amount: u256) -> Fixed {
             let mantissa_1e9: Fixed = FixedTrait::from_unscaled_felt(
                 MANTISSA_1e9.try_into().unwrap()
