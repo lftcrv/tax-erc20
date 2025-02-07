@@ -1,16 +1,13 @@
 use starknet::ContractAddress;
 use snforge_std::{
     declare, ContractClassTrait, DeclareResultTrait, start_cheat_caller_address,
-    stop_cheat_caller_address, cheat_caller_address, start_cheat_block_timestamp_global,
-    stop_cheat_block_timestamp, start_cheat_block_timestamp, CheatSpan
+    stop_cheat_caller_address, cheat_caller_address, stop_cheat_block_timestamp,
+    start_cheat_block_timestamp, CheatSpan
 };
 use starknet::get_block_timestamp;
-use openzeppelin_token::erc20::{
-    ERC20Component,
-    interface::{
-        IERC20DispatcherTrait, IERC20Dispatcher, IERC20MixinDispatcher, IERC20MixinDispatcherTrait
-    }
-};
+use openzeppelin_token::erc20::interface::{IERC20DispatcherTrait, IERC20Dispatcher};
+
+use tax_erc20::bonding_curve::{IBondingCurveABIDispatcher, IBondingCurveABIDispatcherTrait};
 
 
 #[starknet::interface]
@@ -58,54 +55,8 @@ const TRIGGER_LAUNCH: u256 = MAX_SUPPLY * 80 / 100; // 80% of max supply
 
 const BASE_X1E18: felt252 = 5000000; //000;
 const EXPONENT_X1E18: felt252 = 2555000000000;
-
 const STEP: u32 = 3000;
-#[starknet::interface]
-pub trait IBondingCurve<TContractState> {
-    // View functions
-    fn name(self: @TContractState) -> ByteArray;
-    fn locker(self: @TContractState) -> ContractAddress;
-    fn creator(self: @TContractState) -> ContractAddress;
-    fn symbol(self: @TContractState) -> ByteArray;
-    fn decimals(self: @TContractState) -> u8;
-    fn get_current_price(self: @TContractState) -> u256;
-    fn buy_tax_percentage_x100(self: @TContractState) -> u16;
-    fn sell_tax_percentage_x100(self: @TContractState) -> u16;
-    fn market_cap(self: @TContractState) -> u256;
-    fn get_price_for_supply(self: @TContractState, supply: u256) -> u256;
-    fn market_cap_for_price(self: @TContractState, price: u256) -> u256;
-    fn simulate_buy(self: @TContractState, token_amount: u256) -> u256;
-    fn simulate_sell(self: @TContractState, token_amount: u256) -> u256;
-    fn get_taxes(self: @TContractState) -> (u16, u16);
-    fn get_pair(self: @TContractState) -> ContractAddress;
 
-    // ERC20 standard functions
-    fn total_supply(self: @TContractState) -> u256;
-    fn balance_of(self: @TContractState, account: ContractAddress) -> u256;
-    fn allowance(self: @TContractState, owner: ContractAddress, spender: ContractAddress) -> u256;
-    fn transfer(ref self: TContractState, recipient: ContractAddress, amount: u256) -> bool;
-    fn transfer_from(
-        ref self: TContractState, sender: ContractAddress, recipient: ContractAddress, amount: u256
-    ) -> bool;
-    fn approve(ref self: TContractState, spender: ContractAddress, amount: u256) -> bool;
-
-    // External functions
-    fn buy(ref self: TContractState, token_amount: u256) -> u256;
-    fn sell(ref self: TContractState, token_amount: u256) -> u256;
-    fn skim(ref self: TContractState) -> u256;
-}
-// #[starknet::interface]
-// trait IERC20<TContractState> {
-//     fn approve(ref self: TContractState, spender: ContractAddress, amount: u256);
-//     fn decimals(self: @TContractState) -> u8;
-//     fn balance_of(self: @TContractState, owner: ContractAddress) -> u256;
-//     fn balanceOf(self: @TContractState, owner: ContractAddress) -> u256;
-//     fn transfer(ref self: TContractState, recipient: ContractAddress, amount: u256);
-//     fn transfer_from(
-//         ref self: TContractState, sender: ContractAddress, recipient: ContractAddress, amount:
-//         u256
-//     );
-// }
 
 fn deploy_bonding_curve(buy_tax: u16, sell_tax: u16) -> ContractAddress {
     let contract = declare("BondingCurve").expect('Declaration failed').contract_class();
@@ -114,13 +65,11 @@ fn deploy_bonding_curve(buy_tax: u16, sell_tax: u16) -> ContractAddress {
     let calldata: Array<felt252> = array![
         EMPTY_WALLET_PROTOCOL,
         PROTOCOL.into(),
-        1.into(),
+        0.into(),
         'LFTCRV'.into(),
-        1.into(),
         6.into(),
-        1.into(),
+        0.into(),
         'LFTCRV'.into(),
-        1.into(),
         6.into(),
         BASE_X1E18.into(),
         EXPONENT_X1E18.into(),
@@ -141,13 +90,13 @@ fn deploy_router() -> ContractAddress {
 }
 
 fn setup_contracts() -> (
-    ContractAddress, ContractAddress, IERC20Dispatcher, IBondingCurveDispatcher
+    ContractAddress, ContractAddress, IERC20Dispatcher, IBondingCurveABIDispatcher
 ) {
     let eth_holder_address: ContractAddress = ETH_HOLDER.try_into().unwrap();
     let eth_address: ContractAddress = ETH.try_into().unwrap();
     let eth = IERC20Dispatcher { contract_address: eth_address };
     let bonding_address = deploy_bonding_curve(500, 500); // 5% taxes
-    let bonding = IBondingCurveDispatcher { contract_address: bonding_address };
+    let bonding = IBondingCurveABIDispatcher { contract_address: bonding_address };
 
     (eth_holder_address, eth_address, eth, bonding)
 }
@@ -222,9 +171,9 @@ fn test_buy_simulation() {
 
     // Test buying different amounts
     let base = 1000 * THOUSAND_TOKENS;
-    let base_buy = bonding.simulate_buy(base);
-    let base_buy_x10 = bonding.simulate_buy(base * 10);
-    let base_buy_x100 = bonding.simulate_buy(base * 100);
+    let (base_buy, _) = bonding.simulate_buy(base);
+    let (base_buy_x10, _) = bonding.simulate_buy(base * 10);
+    let (base_buy_x100, _) = bonding.simulate_buy(base * 100);
     println!("Base buy: {}", base_buy);
     println!("Base buy x10: {}", base_buy_x10);
     println!("Base buy x100: {}", base_buy_x100);
@@ -236,7 +185,6 @@ fn test_buy_simulation() {
     println!("Cost ratio 2: {}", cost_ratio_2);
     assert!(cost_ratio_2 > cost_ratio_1, "Cost increase should accelerate");
 }
-
 
 #[test]
 #[fork("MAINNET_LATEST")]
@@ -261,7 +209,7 @@ fn test_buy_sell_cycle() {
 
     // Try to sell half
     let sell_amount = buy_amount / 2;
-    let expected_eth = bonding.simulate_sell(sell_amount);
+    let (expected_eth, _) = bonding.simulate_sell(sell_amount);
 
     println!("Expected ETH from sell: {}", expected_eth);
     start_cheat_caller_address(bonding.contract_address, eth_holder);
@@ -271,7 +219,6 @@ fn test_buy_sell_cycle() {
     println!("Actually received ETH: {}", received_eth);
     assert!(received_eth == expected_eth, "Sell simulation should match actual");
 }
-
 
 #[test]
 #[should_panic(expected: "Insufficient balance")]
@@ -286,6 +233,7 @@ fn test_sell_insufficient_balance() {
     bonding.sell(THOUSAND_TOKENS);
     stop_cheat_caller_address(bonding.contract_address);
 }
+
 #[test]
 #[fork("MAINNET_LATEST")]
 fn test_launch_trigger() {
@@ -298,7 +246,7 @@ fn test_launch_trigger() {
     // Try to buy more than launch trigger
     let over_trigger = TRIGGER_LAUNCH + 1000000;
     println!("Attempting to buy: {} tokens", over_trigger);
-    let binance_bal = eth.balance_of(eth_holder);
+    // let binance_bal = eth.balance_of(eth_holder);
     // println!("ETH balance: {}", binance_bal /1000000000000000000);
     // start_cheat_caller_address(eth_address, eth_holder);
     cheat_caller_address(bonding.contract_address, eth_holder, CheatSpan::TargetCalls(1));
@@ -315,11 +263,11 @@ fn test_launch_trigger() {
     println!("test_launch_triggerETH spent: {}", eth_required);
     // Verify supply is capped
     // let creator = bonding.creator();
-    let pair_contract = IERC20MixinDispatcher { contract_address: bonding.get_pair() };
+    let pair_contract = IERC20Dispatcher { contract_address: bonding.get_pair() };
     let router = IGradualLockerDispatcher { contract_address: bonding.locker() };
 
     println!("Pair contract address: {:?}", bonding.get_pair());
-    let lp_bal = pair_contract.balanceOf(bonding.contract_address);
+    let lp_bal = pair_contract.balance_of(bonding.contract_address);
     let one_year = 31536000;
     let now: u64 = get_block_timestamp().try_into().unwrap();
 
@@ -339,15 +287,22 @@ fn test_launch_trigger() {
 
     stop_cheat_block_timestamp(router.contract_address);
 
-
     stop_cheat_caller_address(router.contract_address);
     println!(
-        "LP claim 6 month : {}LP claim for 1 year: {} -> LP claim for 2 year: {}", lp_after_6_month,lp_after_1_year, lp_after_2_year
+        "LP claim 6 month : {}LP claim for 1 year: {} -> LP claim for 2 year: {}",
+        lp_after_6_month,
+        lp_after_1_year,
+        lp_after_2_year
     );
     assert!(
-        lp_after_6_month == lp_after_1_year, "LP claim for same timestamp diff should be the same"
+        lp_after_6_month == lp_after_1_year,
+        "LP claim for same timestamp diff should be the
+        same"
     );
-    assert!(lp_after_2_year == lp_after_1_year * 2, "LP claim for 1 (all the secone) year should be double of 6 mont");
+    assert!(
+        lp_after_2_year == lp_after_1_year * 2,
+        "LP claim for 1 (all the secone) year should be double of 6 mont"
+    );
     println!("LP tokens: {}", lp_bal);
 
     assert!(bonding.total_supply() <= MAX_SUPPLY, "Supply should not exceed launch trigger");
@@ -392,7 +347,7 @@ fn test_transfer_pre_launch_on_pool() {
     stop_cheat_caller_address(eth_address);
 
     start_cheat_caller_address(bonding.contract_address, eth_holder);
-    let eth_required = bonding.buy(THOUSAND_TOKENS);
+    let _ = bonding.buy(THOUSAND_TOKENS);
     stop_cheat_caller_address(bonding.contract_address);
 
     start_cheat_caller_address(bonding.contract_address, eth_holder);
@@ -409,7 +364,7 @@ fn test_transfer_pre_launch_on_account() {
     stop_cheat_caller_address(eth_address);
 
     start_cheat_caller_address(bonding.contract_address, eth_holder);
-    let eth_required = bonding.buy(THOUSAND_TOKENS);
+    let _ = bonding.buy(THOUSAND_TOKENS);
     stop_cheat_caller_address(bonding.contract_address);
 
     start_cheat_caller_address(bonding.contract_address, eth_holder);
@@ -433,5 +388,50 @@ fn test_sell_without_balance() {
     );
     bonding.sell(1000000); // Try to sell 1 token
     stop_cheat_caller_address(bonding.contract_address);
+}
+
+#[test]
+#[fork("MAINNET_LATEST")]
+fn test_buy_sub_underflow() {
+    let (eth_holder, eth_address, eth, bonding) = setup_contracts();
+    println!("Bonding curve address: ");
+
+    // Setup approvals
+    start_cheat_caller_address(eth_address, eth_holder);
+    eth.approve(bonding.contract_address, 1_0000_0000_00000_00000);
+    stop_cheat_caller_address(eth_address);
+
+    // Buy tokens
+    let buy_amount = 100;
+    let eth_bal_before = eth.balance_of(eth_holder);
+    println!("ETH balance before: {}", eth_bal_before);
+
+    start_cheat_caller_address(bonding.contract_address, eth_holder);
+    println!("price: {}", bonding.get_current_price());
+    let eth_spent = bonding.buy(buy_amount);
+    println!("ETH spent for buy: {}", eth_spent);
+    let (expected_eth, tax) = bonding.simulate_buy(buy_amount);
+    println!("price: {}", bonding.get_current_price());
+    println!("Expected ETH from buy: {} and tax {}", expected_eth, tax);
+    let eth_spent = bonding.buy(buy_amount);
+    stop_cheat_caller_address(bonding.contract_address);
+
+    let eth_bal_after = eth.balance_of(eth_holder);
+    println!("ETH balance change: {}", eth_bal_before - eth_bal_after);
+
+    println!("ETH spent for buy: {}", eth_spent);
+    println!("New total supply: {}", bonding.total_supply());
+
+    // Try to sell half
+    let sell_amount = buy_amount / 2;
+    let (expected_eth, _) = bonding.simulate_sell(sell_amount);
+
+    println!("Expected ETH from sell: {}", expected_eth);
+    start_cheat_caller_address(bonding.contract_address, eth_holder);
+    let received_eth = bonding.sell(sell_amount);
+    stop_cheat_caller_address(bonding.contract_address);
+
+    println!("Actually received ETH: {}", received_eth);
+    assert!(received_eth == expected_eth, "Sell simulation should match actual");
 }
 
