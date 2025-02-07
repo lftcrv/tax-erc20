@@ -24,6 +24,8 @@ scarb test
 
 ## 📚 Deployment
 
+### Token
+
 ```bash
 starkli declare --keystore-password $KEYSTORE_PASSWORD target/dev/tax_erc20_integrationtest_BondingCurve.test.contract_class.json --watch
 ```
@@ -44,7 +46,7 @@ _locker: ContractAddress
 
 Example
 ```bash
-starkli deploy --keystore-password $KEYSTORE_PASSWORD \
+starkli deploy --keystore-password $KEYSTORE_PASSWORD <BONDING_CLASS_HASH> \
 0xdeployer \
 0xcreator \
 0 str:'LEFTCURVE' 9 \
@@ -54,5 +56,12 @@ starkli deploy --keystore-password $KEYSTORE_PASSWORD \
 3000 \
 1000 \
 1000 \
-0x0locker
-``` 
+0x0locker --watch
+```
+
+### Locker
+
+```bash
+starkli declare --keystore-password $KEYSTORE_PASSWORD target/dev/tax_erc20_GradualLocker.contract_class.json --watch
+starkli deploy --keystore-password $KEYSTORE_PASSWORD <LOCKER_CLASSHASH> --watch
+```
