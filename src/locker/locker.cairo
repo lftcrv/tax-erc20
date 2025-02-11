@@ -5,7 +5,7 @@ pub mod GradualLocker {
         StoragePointerReadAccess, Map, StoragePointerWriteAccess, StoragePathEntry
     };
 
-    use openzeppelin_token::erc20::{interface::{IERC20MixinDispatcher, IERC20MixinDispatcherTrait}};
+    use openzeppelin_token::erc20::interface::{IERC20MixinDispatcher, IERC20MixinDispatcherTrait};
 
     use crate::locker::IGradualLocker;
 
@@ -44,14 +44,14 @@ pub mod GradualLocker {
             end_timestamp: u64,
             owner: ContractAddress,
         ) -> TokenLocked {
-            assert!(amount != 0, "No empty amount");
-            assert!(end_timestamp > get_block_timestamp(), " Cannot lock antero");
-            let old_token = self.token_locked_by_user.entry(owner).entry(token).read();
-            assert!(old_token.initial_amount == 0, " Cannot lock twice the same lp per owner");
-
             let caller = get_caller_address();
             let this = get_contract_address();
             let timestamp = get_block_timestamp();
+
+            assert!(amount != 0, "No empty amount");
+            assert!(end_timestamp > timestamp, " Cannot lock antero");
+            let old_token = self.token_locked_by_user.entry(owner).entry(token).read();
+            assert!(old_token.initial_amount == 0, " Cannot lock twice the same lp per owner");
 
             let token_locked = TokenLocked {
                 end_timestamp,
@@ -67,13 +67,11 @@ pub mod GradualLocker {
             token_locked
         }
 
-
         fn get_lock(
             self: @ContractState, owner: ContractAddress, token: ContractAddress,
         ) -> TokenLocked {
             self.token_locked_by_user.entry(owner).entry(token).read()
         }
-
 
         fn lockCamel(
             ref self: ContractState,
