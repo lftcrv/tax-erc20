@@ -9,12 +9,10 @@ edition = "2024_07"
 starknet = ">=2.8.5"
 openzeppelin_introspection = '0.19'
 openzeppelin_token = '0.19'
-alexandria_math = { git = "https://github.com/keep-starknet-strange/alexandria.git" }
 cubit = "1.3.1"
 
 [dev-dependencies]
-snforge_std = { git = "https://github.com/foundry-rs/starknet-foundry", tag = "v0.34.0" }
-starknet = "2.8.5"
+snforge_std = '0.35.1'
 
 [[target.starknet-contract]]
 sierra = true
@@ -26,7 +24,7 @@ test = "snforge test"
 
 [[tool.snforge.fork]]
 name = "MAINNET_LATEST"
-url = "https://starknet-mainnet.public.blastapi.io/rpc/v0_7"
+url = "$STARKNET_RPC"
 block_id.tag = "latest"
 
 # Visit https://foundry-rs.github.io/starknet-foundry/appendix/scarb-toml.html for more information
