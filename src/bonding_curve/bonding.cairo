@@ -42,7 +42,6 @@ pub mod BondingCurve {
     // Components
     component!(path: ERC20Component, storage: erc20, event: ERC20Event);
 
-
     #[derive(Drop, PartialEq, starknet::Event)]
     pub struct BuyOrSell {
         #[key]
@@ -51,6 +50,7 @@ pub mod BondingCurve {
         pub value: u256,
         pub tax: u256
     }
+
     #[derive(Drop, PartialEq, starknet::Event)]
     pub struct PoolLaunched {
         #[key]
@@ -60,7 +60,6 @@ pub mod BondingCurve {
         pub pair_address: ContractAddress,
         pub creator: ContractAddress,
     }
-
 
     // Storage
     #[storage]
@@ -271,6 +270,24 @@ pub mod BondingCurve {
             } else {
                 0
             }
+        }
+
+        fn quote(self: @ContractState, eth_amount: u256) -> u256 {
+            let mut step = MAX_SUPPLY / 2;
+            let mut quoted_token = MAX_SUPPLY / 2;
+            let (mut eth_estimate, _) = self._simulate_buy(quoted_token);
+
+            while (step > 0) {
+                step /= 2;
+                if eth_estimate > eth_amount {
+                    quoted_token -= step;
+                } else {
+                    quoted_token += step;
+                }
+                let (new_guess, _) = self._simulate_buy(quoted_token);
+                eth_estimate = new_guess;
+            };
+            quoted_token
         }
     }
 

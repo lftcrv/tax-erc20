@@ -19,6 +19,7 @@ pub trait IBondingCurve<TContractState> {
     fn get_pair(self: @TContractState) -> ContractAddress;
     fn supply_advancement_percentage_x100(self: @TContractState) -> u16;
     fn locker(self: @TContractState) -> ContractAddress;
+    fn quote(self: @TContractState, eth_amount: u256) -> u256;
 
     // External functions
     fn buy(ref self: TContractState, token_amount: u256) -> u256;
@@ -45,6 +46,7 @@ pub trait IBondingCurveABI<TContractState> {
     fn get_pair(self: @TContractState) -> ContractAddress;
     fn supply_advancement_percentage_x100(self: @TContractState) -> u16;
     fn locker(self: @TContractState) -> ContractAddress;
+    fn quote(self: @TContractState, eth_amount: u256) -> u256;
 
     // ERC20 standard functions
     fn total_supply(self: @TContractState) -> u256;
