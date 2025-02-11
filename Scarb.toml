@@ -24,7 +24,7 @@ test = "snforge test"
 
 [[tool.snforge.fork]]
 name = "MAINNET_LATEST"
-url = "https://free-rpc.nethermind.io/mainnet-juno"
+url = "$STARKNET_RPC"
 block_id.tag = "latest"
 
 # Visit https://foundry-rs.github.io/starknet-foundry/appendix/scarb-toml.html for more information
