@@ -5,7 +5,7 @@ use snforge_std::{
     start_cheat_block_timestamp, CheatSpan
 };
 use starknet::get_block_timestamp;
-use openzeppelin_token::erc20::interface::{IERC20DispatcherTrait, IERC20Dispatcher};
+use openzeppelin_token::erc20::interface::{ERC20ABIDispatcherTrait, ERC20ABIDispatcher};
 
 use tax_erc20::bonding_curve::{IBondingCurveABIDispatcher, IBondingCurveABIDispatcherTrait};
 
@@ -90,11 +90,11 @@ fn deploy_router() -> ContractAddress {
 }
 
 fn setup_contracts() -> (
-    ContractAddress, ContractAddress, IERC20Dispatcher, IBondingCurveABIDispatcher
+    ContractAddress, ContractAddress, ERC20ABIDispatcher, IBondingCurveABIDispatcher
 ) {
     let eth_holder_address: ContractAddress = ETH_HOLDER.try_into().unwrap();
     let eth_address: ContractAddress = ETH.try_into().unwrap();
-    let eth = IERC20Dispatcher { contract_address: eth_address };
+    let eth = ERC20ABIDispatcher { contract_address: eth_address };
     let bonding_address = deploy_bonding_curve(500, 500); // 5% taxes
     let bonding = IBondingCurveABIDispatcher { contract_address: bonding_address };
 
@@ -172,10 +172,10 @@ fn test_buy_simulation() {
     // Test buying different amounts
     let base = 1000 * THOUSAND_TOKENS;
     let (base_buy, _) = bonding.simulate_buy(base);
-    let (base_buy_x10, _) = bonding.simulate_buy(base * 10);
-    let (base_buy_x100, _) = bonding.simulate_buy(base * 100);
-    println!("Base buy: {}", base_buy);
-    println!("Base buy x10: {}", base_buy_x10);
+    let (base_buy_x10, _) = bonding.simulate_buy(base * 100);
+    let (base_buy_x100, _) = bonding.simulate_buy(base * 10000);
+    println!("Base buy     : {}", base_buy);
+    println!("Base buy x10 : {}", base_buy_x10);
     println!("Base buy x100: {}", base_buy_x100);
 
     // Verify exponential price increase
@@ -247,11 +247,16 @@ fn test_launch_trigger() {
     let over_trigger = TRIGGER_LAUNCH + 1000000;
     println!("Attempting to buy: {} tokens", over_trigger);
     // let binance_bal = eth.balance_of(eth_holder);
-    // println!("ETH balance: {}", binance_bal /1000000000000000000);
+    // println!("ETH balance: {} ({})", binance_bal, binance_bal / 1000000000000000000);
+
     // start_cheat_caller_address(eth_address, eth_holder);
     cheat_caller_address(bonding.contract_address, eth_holder, CheatSpan::TargetCalls(1));
+
+    //start_cheat_caller_address(bonding.contract_address, eth_holder);
     let eth_required = bonding.buy(over_trigger);
-    stop_cheat_caller_address(eth_holder);
+    stop_cheat_caller_address(bonding.contract_address);
+
+    println!("bought");
     let tax_protocol: ContractAddress = EMPTY_WALLET_PROTOCOL.try_into().unwrap();
     let taxes = eth.balance_of(tax_protocol);
     let expected_taxes = eth_required - (eth_required / 105 * 100);
@@ -263,31 +268,31 @@ fn test_launch_trigger() {
     println!("test_launch_triggerETH spent: {}", eth_required);
     // Verify supply is capped
     // let creator = bonding.creator();
-    let pair_contract = IERC20Dispatcher { contract_address: bonding.get_pair() };
-    let router = IGradualLockerDispatcher { contract_address: bonding.locker() };
+    let pair_contract = ERC20ABIDispatcher { contract_address: bonding.get_pair() };
+    let locker = IGradualLockerDispatcher { contract_address: bonding.locker() };
 
     println!("Pair contract address: {:?}", bonding.get_pair());
-    let lp_bal = pair_contract.balance_of(bonding.contract_address);
+    let lp_bal = pair_contract.balanceOf(bonding.contract_address); // CamelCase
     let one_year = 31536000;
-    let now: u64 = get_block_timestamp().try_into().unwrap();
+    let now: u64 = get_block_timestamp();
 
-    start_cheat_caller_address(router.contract_address, EMPTY_WALLET_PROTOCOL.try_into().unwrap());
-    start_cheat_block_timestamp(router.contract_address, now + one_year / 2);
+    start_cheat_caller_address(locker.contract_address, EMPTY_WALLET_PROTOCOL.try_into().unwrap());
+    start_cheat_block_timestamp(locker.contract_address, now + one_year / 2);
     println!("Protocol : {:?}", EMPTY_WALLET_PROTOCOL);
-    let lp_after_6_month: u256 = router.claim(bonding.get_pair());
+    let lp_after_6_month: u256 = locker.claim(bonding.get_pair());
 
-    stop_cheat_block_timestamp(router.contract_address);
-    start_cheat_block_timestamp(router.contract_address, now + one_year);
-    let lp_after_1_year: u256 = router.claim(bonding.get_pair());
+    stop_cheat_block_timestamp(locker.contract_address);
+    start_cheat_block_timestamp(locker.contract_address, now + one_year);
+    let lp_after_1_year: u256 = locker.claim(bonding.get_pair());
 
-    stop_cheat_block_timestamp(router.contract_address);
+    stop_cheat_block_timestamp(locker.contract_address);
 
-    start_cheat_block_timestamp(router.contract_address, now + one_year * 2);
-    let lp_after_2_year: u256 = router.claim(bonding.get_pair());
+    start_cheat_block_timestamp(locker.contract_address, now + one_year * 2);
+    let lp_after_2_year: u256 = locker.claim(bonding.get_pair());
 
-    stop_cheat_block_timestamp(router.contract_address);
+    stop_cheat_block_timestamp(locker.contract_address);
 
-    stop_cheat_caller_address(router.contract_address);
+    stop_cheat_caller_address(locker.contract_address);
     println!(
         "LP claim 6 month : {}LP claim for 1 year: {} -> LP claim for 2 year: {}",
         lp_after_6_month,
@@ -392,7 +397,7 @@ fn test_sell_without_balance() {
 
 #[test]
 #[fork("MAINNET_LATEST")]
-fn test_buy_sub_underflow() {
+fn test_buy_no_sub_underflow() {
     let (eth_holder, eth_address, eth, bonding) = setup_contracts();
     println!("Bonding curve address: ");
 
@@ -435,3 +440,18 @@ fn test_buy_sub_underflow() {
     assert!(received_eth == expected_eth, "Sell simulation should match actual");
 }
 
+#[test]
+fn test_quote() {
+    let (_, _, _, bonding) = setup_contracts();
+
+    let eth_amount = ONE_ETH / 1000;
+    let token_amount = bonding.quote(eth_amount);
+    let (simulated_eth, _) = bonding.simulate_buy(token_amount);
+    println!("Token amount for 0.001 ETH: {}", token_amount);
+    println!("ETH for token amount: {}", simulated_eth);
+    assert!(
+        core::cmp::max(eth_amount, simulated_eth)
+            - core::cmp::min(eth_amount, simulated_eth) < 1000,
+        "Quote should be consistent with buy simulation"
+    );
+}
